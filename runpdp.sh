@@ -42,8 +42,6 @@ EOF
 chmod +x pdp.expect
 ./pdp.expect &
 
-apt install -y ftp netcat
-
 while ! nc -z $GW 21 ; do
   sleep 5
 done

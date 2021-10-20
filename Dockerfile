@@ -13,4 +13,5 @@ RUN git clone https://github.com/simh/simh.git && \
     make pdp11 && cp BIN/pdp11 /pdp11
 
 COPY runpdp.sh /runpdp.sh
-RUN chmod +x /runpdp.sh
+
+ENTRYPOINT ["/runpdp.sh"]
