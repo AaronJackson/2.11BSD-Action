@@ -58,3 +58,5 @@ ftp -invp $GW <<EOF
 user root $PASSWORD
 ls
 EOF
+
+ls $GITHUB_WORKSPACE

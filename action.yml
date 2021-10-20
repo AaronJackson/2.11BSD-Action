@@ -1,0 +1,7 @@
+name: '2.11BSD kernel build'
+description: 'Builds the 2.11BSD kernel inside a PDP-11 simulator'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.who-to-greet }}
