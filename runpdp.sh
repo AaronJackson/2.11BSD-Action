@@ -1,21 +1,23 @@
 #!/bin/bash
 
+[ -f ci.dsk.gz ] && gzip -d ci.dsk.gz
+
 PASSWORD=Password9
 DATE=$(date +%y%m%d%H%M)
-GW=$(ifconfig tap0 | grep "inet 10.0" | awk '{ print $2 }')
+GW=$(ifconfig | grep "inet 10.0" | awk '{ print $2 }')
 
 echo "2.11BSD root password will be set to $PASSWORD"
 echo "Date will be set to $DATE"
 
-cat - dump.expect > pdp.expect <<EOF
+cat - > pdp.expect <<EOF
 #!/usr/bin/expect -f
 spawn /pdp11
 
-expect "sim>" {send "set cpu 11/73 4M idle\n"}
+expect "sim>" {send "set cpu 11/73 4M\n"}
 expect "sim>" {send "set rq enabled\n"}
 expect "sim>" {send "att rq0 ci.dsk\n"}
 expect "sim>" {send "set clk 50hz\n"}
-expect "sim>" {send "att xq nat:tcp=21:10.0.2.64:21,gateway=$GW\n"}
+expect "sim>" {send "att xq nat:tcp=21:10.0.2.64:21,tcp=23:10.0.2.64:23,gateway=$GW\n"}
 expect "sim>" {send "boot rq0\n"}
 
 expect ": " {send "ra(0,0,0)unix\n"}
@@ -35,12 +37,32 @@ expect "# " {send "> /etc/ftpusers\n"}
 expect "# " {send "echo ALL: ALL: ALLOW >> /etc/hosts.allow\n"}
 expect "# " {send "ifconfig qe0 inet netmask 255.255.255.0 simh broadcast 10.0.2.255 up\n"}
 
+proc checkrun {cmd} {
+  expect "# " { send "\$cmd\n" }
+  expect "# " {send "echo \\\$?\n"}
+  expect {
+    "0" { }
+    "1" { exit 1 }
+  }
+}
+
 set timeout -1
-expect "0123456789" {send "while true ; do sleep 100; done\n"}
+expect "# " {send "cd /usr/src\n"}
+expect "# " {send "while \[ ! -f FTP_LOCK \] ; do sleep 4 ; echo -n . ; done\n" }
+
+checkrun "tar -xvf github.tar"
+checkrun "rm github.tar"
+checkrun "cd sys/conf"
+checkrun "./config GENERIC"
+checkrun "cd ../GENERIC"
+
+checkrun "make clean"
+checkrun "make"
 EOF
 
 chmod +x pdp.expect
 ./pdp.expect &
+pdp=$!
 
 while ! nc -z $GW 21 ; do
   sleep 5
@@ -53,10 +75,18 @@ done
 # installation is in the same subnet is just coincidental and nothing
 # to worry about.
 
-# Verify ftp connection
+pushd github
+tar -cf ../github.tar ./sys
+popd
+touch FTP_LOCK
+
 ftp -invp $GW <<EOF
 user root $PASSWORD
-ls
+cd /usr/src
+put github.tar
+put FTP_LOCK
 EOF
 
-ls $GITHUB_WORKSPACE
+echo "Returning to PDP-11..."
+wait $!
+exit $?
