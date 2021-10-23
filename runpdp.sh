@@ -2,9 +2,10 @@
 
 [ -f ci.dsk.gz ] && gzip -d ci.dsk.gz
 
-PASSWORD=Password9
+PASSWORD=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 8)
 DATE=$(date +%y%m%d%H%M)
 GW=$(ifconfig | grep "inet 10.0" | awk '{ print $2 }')
+KERNCONF=${1:-GENERIC}
 
 echo "2.11BSD root password will be set to $PASSWORD"
 echo "Date will be set to $DATE"
@@ -53,8 +54,8 @@ expect "# " {send "while \[ ! -f FTP_LOCK \] ; do sleep 4 ; echo -n . ; done\n" 
 checkrun "tar -xvf github.tar"
 checkrun "rm github.tar"
 checkrun "cd sys/conf"
-checkrun "./config GENERIC"
-checkrun "cd ../GENERIC"
+checkrun "./config $KERNCONF"
+checkrun "cd ../$KERNCONF"
 
 checkrun "make clean"
 checkrun "make"
@@ -88,5 +89,5 @@ put FTP_LOCK
 EOF
 
 echo "Returning to PDP-11..."
-wait $!
+wait $pdp
 exit $?
