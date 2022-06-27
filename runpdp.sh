@@ -12,7 +12,7 @@ echo "Date will be set to $DATE"
 
 cat - > pdp.expect <<EOF
 #!/usr/bin/expect -f
-spawn /pdp11
+spawn pdp11
 
 expect "sim>" {send "set cpu 11/73 4M\n"}
 expect "sim>" {send "set rq enabled\n"}
