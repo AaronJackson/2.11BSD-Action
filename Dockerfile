@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt update && \
     apt upgrade -y && \
-    apt install -y expect curl net-tools git netcat ftp simh
+    apt install -y expect curl net-tools git netcat ftp simh rsync
 
 RUN curl -so ci.dsk.gz https://asjackson.s3.fr-par.scw.cloud/211bsd/ci.dsk.gz
 

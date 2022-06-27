@@ -1,14 +1,16 @@
 #!/bin/bash
 
+set -eu
+
 [ -f ci.dsk.gz ] && gzip -d ci.dsk.gz
 
 echo "Mounting 2.11BSD file system with retro-fuse"
 /retro-fuse/bsd211fs /ci.dsk /mnt
 
 echo "syncing kernel sources"
-cp -R /github/sys/ /mnt/usr/src/sys/
+rsync -a --safe-links --ignore-errors /github/ /mnt/usr/src/ || true
 
-echo "Unbounding retro-fuse file system"
+echo "Unmounting retro-fuse file system"
 umount /mnt
 
 PASSWORD=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 8)
