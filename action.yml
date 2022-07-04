@@ -1,0 +1,50 @@
+name: '2.11BSD Action'
+description: 'Get a shell in 2.11BSD on a SIMH PDP11'
+
+inputs:
+  path:
+    description: "Directory to copy sources to"
+    required: false
+    default: "/github"
+
+  run:
+    description: "Your shell command block"
+    required: true
+
+outputs:
+  blank:
+    description: "dunno if i need this yet"
+
+runs:
+  using: 'composite'
+  steps:
+    - name: checkout
+      uses: actions/checkout@v3
+      with:
+        ref: ${{ github.head_ref }}
+
+    - name: install simh and rsync
+      shell: bash
+      run: |
+        sudo apt install -y expect curl simh rsync
+
+    - name: build and install retro-fuse
+      shell: bash
+      run: |
+        sudo apt install -y libfuse-dev build-essential
+        git clone https://github.com/jaylogue/retro-fuse.git
+        cd retro-fuse
+        make
+        sudo cp bsd211fs /usr/bin/bsd211fs
+        cd ..
+        rm -rf retro-fuse
+
+    - name: download 2.11bsd image
+      shell: bash
+      run: |
+        curl -so ci.dsk.gz https://asjackson.s3.fr-par.scw.cloud/211bsd/ci.dsk.gz
+
+    - name: run command block
+      shell: bash
+      run: |
+        sudo $GITHUB_ACTION_PATH/runpdp.sh "${{ inputs.run }}" "${{ inputs.path }}"
