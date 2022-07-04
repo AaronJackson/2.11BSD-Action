@@ -21,8 +21,6 @@ sudo umount /bsd
 
 PASSWORD=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 8)
 DATE=$(date +%y%m%d%H%M)
-GW=$(ifconfig | grep "inet 10.0" | awk '{ print $2 }')
-KERNCONF=${1:-GENERIC}
 
 echo "2.11BSD root password will be set to $PASSWORD"
 echo "Date will be set to $DATE"
@@ -69,9 +67,5 @@ EOF
 done <<< "$arg_run"
 
 chmod +x pdp.expect
-./pdp.expect &
-pdp=$!
-
-echo "Returning to PDP-11..."
-wait $pdp
+./pdp.expect
 exit $?

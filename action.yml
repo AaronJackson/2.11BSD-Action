@@ -22,10 +22,12 @@ runs:
       uses: actions/checkout@v3
       with:
         ref: ${{ github.head_ref }}
+
     - name: install simh and rsync
       shell: bash
       run: |
         sudo apt install -y expect curl simh rsync
+
     - name: build and install retro-fuse
       shell: bash
       run: |
