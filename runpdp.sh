@@ -51,6 +51,7 @@ proc checkrun {cmd} {
   expect "# " {send "echo \\\$?\n"}
   expect {
     "0" { }
+    "1" { exit 1 }
     default { exit 1 }
   }
 }
