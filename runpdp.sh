@@ -2,16 +2,22 @@
 
 set -eu
 
+arg_run="$1"
+arg_path="$2"
+
 [ -f ci.dsk.gz ] && gzip -d ci.dsk.gz
 
 echo "Mounting 2.11BSD file system with retro-fuse"
-/retro-fuse/bsd211fs /ci.dsk /mnt
+sudo mkdir /bsd
+sudo chown $USER /bsd
+bsd211fs ci.dsk /bsd
 
-echo "syncing kernel sources"
-rsync -a --safe-links --ignore-errors /github/ /mnt/usr/src/ || true
+echo "syncing sources"
+mkdir -p "/mnt/$arg_path"
+rsync -a --safe-links --ignore-errors "$PWD/" "/bsd/$arg_path" || true
 
 echo "Unmounting retro-fuse file system"
-umount /mnt
+sudo umount /bsd
 
 PASSWORD=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 8)
 DATE=$(date +%y%m%d%H%M)
@@ -47,19 +53,20 @@ proc checkrun {cmd} {
   expect "# " {send "echo \\\$?\n"}
   expect {
     "0" { }
-    "1" { exit 1 }
+    default { exit 1 }
   }
 }
 
 set timeout -1
 
-checkrun "cd sys/conf"
-checkrun "./config $KERNCONF"
-checkrun "cd ../$KERNCONF"
-
-checkrun "make clean"
-checkrun "make"
+checkrun "cd $arg_path"
 EOF
+
+while IFS= read -r line; do
+    cat >> pdp.expect <<EOF
+checkrun "$line"
+EOF
+done <<< "$arg_run"
 
 chmod +x pdp.expect
 ./pdp.expect &

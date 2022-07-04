@@ -1,0 +1,17 @@
+on: [push]
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    name: Verifies that we can talk to the PDP
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+      - name: run uname
+        uses: ./
+        with:
+          path: /github
+          run: |
+            uname -a
+            ls -la
+            cat action.yml
