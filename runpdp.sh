@@ -5,12 +5,12 @@ set -eu
 arg_run="$1"
 arg_path="$2"
 
-[ -f ci.dsk.gz ] && gzip -d ci.dsk.gz
+[ -f ../ci.dsk.gz ] && gzip -d ../ci.dsk.gz
 
 echo "Mounting 2.11BSD file system with retro-fuse"
 sudo mkdir /bsd
 sudo chown $USER /bsd
-bsd211fs ci.dsk /bsd
+bsd211fs ../ci.dsk /bsd
 
 echo "syncing sources"
 mkdir -p "/mnt/$arg_path"
