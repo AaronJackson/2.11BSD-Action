@@ -1,0 +1,168 @@
+Subject: J11 hack 29th anniversary patch (#474)
+Index:	 src/sys/pdp/trap.c
+
+Description:
+        The patch #150, issued on August 23rd, 1993, addressed a serious bug
+        in the stack expansion logic that only affected KDJ-11 based systems.
+        The original problem was caused by a 'movfi fr0,-(sp)' instruction
+        that tried to write a double word even though the 'sp' was only 2 bytes
+        above the end of the stack segment. The state after the abort is
+        different on an 11/70 and a KDJ-11 based system:
+        
+        - 11/70: the 'sp' is decremented by 4, MMR1 reflects that change
+        - KDJ-11: the 'sp' is unchanged, MMR1 stays zero
+        
+        Both are consistent system states and allow to the aborted instruction
+        to be restarted. However, trap.c examines the value of 'sp' to decide
+        whether the stack has reached the end of allocation or simply an 
+        erroneous memory access has occured. If 'sp' is below the allocated
+        stack segment, the stack is extended, otherwise the process is aborted
+        with a segment fault. On an 11/70 this worked fine. But on KDJ-11 based
+        systems this check failed and the process was aborted.
+        
+        The solution in patch #150 was to use a corrected stack pointer in the
+        extension decision on KDJ-11 based systems. The stack pointer was
+        locally adjusted down by 4. That solved the 'movfi' problem where a
+        double word is stored.
+
+        However, the behavior seen for the 'movfi' instruction is a general
+        feature of the KDJ-11 for all FPP writes. In the case of a 'double'
+        store with a 'movf fr0,-(sp)' four words are written. And it's obvious
+        that an adjustment of 4 is not sufficient. If the stack is 6 or 4 bytes
+        above the end of the stack segment the current logic fails. The
+        adjustment must be 8, which is the size of the largest object that can
+        be written with a single FPP instruction.
+
+Repeat-By:
+        This was found during a code inspection, almost 29 years after the patch
+        #150 was released. Apparently, the situation is very rare in the wild.
+        But it can happen, the C compiler does generate 'double' pushes under
+        certain circumstances. The reproducer is just a variation of the
+        case used in patch #150. Assume the stack segment is from
+        0175000 thru 0177776. Now
+
+        setd
+        mov     $175006,sp              / set stack 6 bytes of the end
+        clrf    fr0
+        movf    fr0,-(sp)
+
+        The 'movf' will abort because the first word is written at 0174776.
+        On a KDJ-11, the 'sp' stays at 0175006. The corrected value will
+        be 0175002, still in the allocated stack segment, and the process
+        is aborted.
+
+Fix:
+	The month of August 2022 saw many (!) words written on the Subject: 
+	"Fun with 11/70, J11, FPP, SimH, and 2.11BSD.
+
+	My role was that of a librarian waiting for the researchers to complete
+	the study and submit the reports :)
+	
+	Credit where it is due: thanks to Walter F.J. Mueller (W.F.J.Mueller@gsi.de)
+	for his reseaerch (user forums, mailing lists, etc),   It was he who
+	noticed that patch #150, in August 1993, made the first attempt at
+	fixing the problem.   
+	
+	It was Walter's suggestion that the updated solution be nemed:
+
+	    Subject: J11 hack 29th anniversary patch
+	
+	and dated August 23, 2022 to commemorate the 29th anniversary of 
+	patch #150.
+
+	Cut where indicated and save to /tmp/474.patch
+
+	Then:
+
+	cd /
+	patch -p0 < /tmp/474.patch
+
+	A kernel recompile is recommended.  At this point in 2.11BSD's history
+	it is hoped that explicit directions for recompiling the kernel are
+	not necessary ;)
+
+	IF you maintain a GENERIC kernel (in /genunix for example) then that
+	kernel should also be recompiled.
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.dfupdate.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+-------------------------------- cut here ---------------------------
+*** ./usr/src/sys/pdp/trap.c.old	Sun Feb 13 12:44:02 2000
+--- ./usr/src/sys/pdp/trap.c	Thu Aug 18 07:17:46 2022
+***************
+*** 3,9 ****
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)trap.c	1.6 (2.11BSD) 1999/9/13
+   */
+  
+  #include "param.h"
+--- 3,9 ----
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)trap.c	1.7 (2.11BSD) 2022/8/18
+   */
+  
+  #include "param.h"
+***************
+*** 205,212 ****
+  	 * The 'grow' routine sees that SP is still within the (valid) stack
+  	 * segment and does not extend the stack, resulting in a 'segmentation
+  	 * violation' rather than a successfull floating to long store.
+! 	 * The "fix" is to pretend that SP is 4 bytes lower than it really
+! 	 * is (for KDJ-11 systems only) when calling 'grow'.
+  	 */
+  	case T_SEGFLT + USER:
+  		{
+--- 205,216 ----
+  	 * The 'grow' routine sees that SP is still within the (valid) stack
+  	 * segment and does not extend the stack, resulting in a 'segmentation
+  	 * violation' rather than a successfull floating to long store.
+! 	 * A first "fix" was to pretend that SP is 4 bytes lower than it really
+! 	 * is (for KDJ-11 systems only) when calling 'grow'. However, doing
+! 	 *      setd
+! 	 *      movf fr0,-(sp)
+! 	 * still fails, as found a bit later (29yrs), so the final "fix" is to
+! 	 * pretend that the SP is 8 bytes lower than it really is.
+  	 */
+  	case T_SEGFLT + USER:
+  		{
+***************
+*** 214,220 ****
+  
+  		osp = sp;
+  		if (kdj11)
+! 			osp -= 4;
+  		if (backup(u.u_ar0) == 0)
+  			if (!(u.u_sigstk.ss_flags & SA_ONSTACK) && 
+  					grow((u_int)osp))
+--- 218,224 ----
+  
+  		osp = sp;
+  		if (kdj11)
+! 			osp -= 8;
+  		if (backup(u.u_ar0) == 0)
+  			if (!(u.u_sigstk.ss_flags & SA_ONSTACK) && 
+  					grow((u_int)osp))
+*** ./VERSION.old	Thu Jan 20 06:27:47 2022
+--- ./VERSION	Thu Aug 18 07:13:49 2022
+***************
+*** 1,5 ****
+! Current Patch Level: 473
+! Date: January 20, 2022
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 474
+! Date: August 23, 2022
+  
+  2.11 BSD
+  ============

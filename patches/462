@@ -1,0 +1,649 @@
+Subject: f77: build error, stop statement error, error message bug, Makefile bug
+Index:	 src/usr.bin/f77/putdmr.c,misc.c,error.c,Makefile
+
+Description:
+	1) Patch #460 introduced an error into putdmr.c that prevents the  f77
+	   compiler from being built.  The final '}' character was accidentally
+	   deleted.
+
+	2) the STOP statement's argument is optional.  If the argument is not
+	   given (or is not valid) f77 will declare a fatal "out of memory"
+	   error.  This is because 0 is passed to calloc(). calloc returns
+	   NULL and NULL means memory allocation failure.
+
+	3) When the error message in 2) above is printed it will be printed
+	   twice.  The first time without the input filename or line number
+	   and the second time with the extra information.
+
+	4) The Makefile's SRCS= line has malloc.c present but malloc.o is NOT
+	   used.  The system's malloc() has always been used.  The malloc.c
+	   file in the f77 directory is not used and is not needed.
+
+	5) The Makefile did not use the C optimizer flag -O.  The comment said
+	   "# Don't use -O here.".  That is a historic relic.
+
+Repeat-By:
+	1) tail putdmr.c and notice that the file ends:
+
+            p2op2(P2PLUS, type);
+            }
+	   rather than
+
+            p2op2(P2PLUS, type);
+            }
+           }
+
+	   Alternatively do "make" and see the compile of putdmr.c fail.
+
+	2)  Compile a program using the STOP command:
+
+----foo.f----
+IU0 = IU
+STOP
+END
+
+	f77 foo.f
+	foo.f:
+	MAIN:
+	out of memory
+	f77 compiler error line 2 of foo.f: out of memory
+
+	3) See above ;)
+
+	4) grep malloc.o Makefile
+
+	   Notice that the object file is not included in any linking step.
+	  
+	5) grep CFLAGS Makefile
+
+	CFLAGS=    -w ${CFL}           # Don't use -O here.
+
+Fix:
+	1) the trailing '}' is added.
+
+	2) When ckalloc() is called with 0 as the argument then increment the
+	   argument value to 1 so that calloc() is not called with input of 0.
+
+	3) Remove the extra/duplicate block of code that produced the first
+	   error message.
+
+	4) Remove malloc.c from the SRCS= statement.
+
+	5) Remove the comment and add -O to CFLAGS.
+
+	The updated C files were also edited to improve coding style and add
+	date/version info at the top of the files.
+
+	To apply this patch cut where indicated and save the patch to /tmp/462
+
+	Then:
+
+cd /
+patch -p0 < /tmp/462
+cd /usr/src/usr.bin/f77
+rm -f malloc.c
+make
+make install
+make clean
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.update.uu.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+*** ./usr/src/usr.bin/f77/Makefile.old	Sat Oct 26 00:42:51 1996
+--- ./usr/src/usr.bin/f77/Makefile	Sat Feb  8 01:04:15 2020
+***************
+*** 3,9 ****
+  #	using the Ritchie pass 2
+  #
+  #	1996/10/25 - 2.11BSD
+! #
+  
+  AS=		as -V
+  C2=		/lib/c2
+--- 3,10 ----
+  #	using the Ritchie pass 2
+  #
+  #	1996/10/25 - 2.11BSD
+! #	2020/2/8 - remove unused malloc.c from SRCS
+! #		   Add -O to CFLAGS.  "Don't use -O here" was a historical relic
+  
+  AS=		as -V
+  C2=		/lib/c2
+***************
+*** 11,21 ****
+  STRINGS=	f77_strings
+  CFL=		-DTARGET=PDP11 -DFAMILY=DMR -DHERE=PDP11 -DOUTPUT=BINARY \
+  		-DPOLISH=POSTFIX -DOVERLAID -DC_OVERLAY
+! CFLAGS=		-w ${CFL}		# Don't use -O here.
+  SEPFLAG= -i
+  
+  SRCS= 	data.c driver.c equiv.c error.c exec.c expr.c gram.c init.c \
+! 	intr.c io.c lex.c main.c malloc.c misc.c pdp11.c pdp11x.c \
+  	proc.c put.c putdmr.c
+  
+  PASS1OBJECTS=	data.o equiv.o error.o exec.o expr.o gram.o init.o \
+--- 12,22 ----
+  STRINGS=	f77_strings
+  CFL=		-DTARGET=PDP11 -DFAMILY=DMR -DHERE=PDP11 -DOUTPUT=BINARY \
+  		-DPOLISH=POSTFIX -DOVERLAID -DC_OVERLAY
+! CFLAGS=		-O -w ${CFL}
+  SEPFLAG= -i
+  
+  SRCS= 	data.c driver.c equiv.c error.c exec.c expr.c gram.c init.c \
+! 	intr.c io.c lex.c main.c misc.c pdp11.c pdp11x.c \
+  	proc.c put.c putdmr.c
+  
+  PASS1OBJECTS=	data.o equiv.o error.o exec.o expr.o gram.o init.o \
+*** ./usr/src/usr.bin/f77/misc.c.old	Mon Feb 16 18:57:39 1987
+--- ./usr/src/usr.bin/f77/misc.c	Sat Feb  8 19:06:53 2020
+***************
+*** 1,8 ****
+  #include "defs"
+  #include "string_defs"
+  
+- 
+- 
+  cpn(n, a, b)
+  register int n;
+  register char *a, *b;
+--- 1,11 ----
++ #if     defined(DOSCCS) && !defined(lint)
++ static char *sccsid = "@(#)misc.c 2.0 (2.11BSD) 2020/2/8";
++ #endif
++ 
++ #include <stdlib.h>
+  #include "defs"
+  #include "string_defs"
+  
+  cpn(n, a, b)
+  register int n;
+  register char *a, *b;
+***************
+*** 11,18 ****
+  	*b++ = *a++;
+  }
+  
+- 
+- 
+  eqn(n, a, b)
+  register int n;
+  register char *a, *b;
+--- 14,19 ----
+***************
+*** 23,34 ****
+  return(YES);
+  }
+  
+- 
+- 
+- 
+- 
+- 
+- 
+  cmpstr(a, b, la, lb)	/* compare two strings */
+  register char *a, *b;
+  ftnint la, lb;
+--- 24,29 ----
+***************
+*** 37,43 ****
+  aend = a + la;
+  bend = b + lb;
+  
+- 
+  if(la <= lb)
+  	{
+  	while(a < aend)
+--- 32,37 ----
+***************
+*** 69,78 ****
+  return(0);
+  }
+  
+- 
+- 
+- 
+- 
+  chainp hookup(x,y)
+  register chainp x, y;
+  {
+--- 63,68 ----
+***************
+*** 87,94 ****
+  return(x);
+  }
+  
+- 
+- 
+  struct listblock *mklist(p)
+  chainp p;
+  {
+--- 77,82 ----
+***************
+*** 100,106 ****
+  return(q);
+  }
+  
+- 
+  chainp mkchain(p,q)
+  register int p, q;
+  {
+--- 88,93 ----
+***************
+*** 119,126 ****
+  return(r);
+  }
+  
+- 
+- 
+  char * varstr(n, s)
+  register int n;
+  register char *s;
+--- 106,111 ----
+***************
+*** 136,144 ****
+  return( name );
+  }
+  
+- 
+- 
+- 
+  char * varunder(n, s)
+  register int n;
+  register char *s;
+--- 121,126 ----
+***************
+*** 158,167 ****
+  return( name );
+  }
+  
+- 
+- 
+- 
+- 
+  char * nounder(n, s)
+  register int n;
+  register char *s;
+--- 140,145 ----
+***************
+*** 178,185 ****
+  return( name );
+  }
+  
+- 
+- 
+  char *copyn(n, s)
+  register int n;
+  register char *s;
+--- 156,161 ----
+***************
+*** 192,199 ****
+  return(p);
+  }
+  
+- 
+- 
+  char *copys(s)
+  char *s;
+  {
+--- 168,173 ----
+***************
+*** 200,207 ****
+  return( copyn( strlen(s)+1 , s) );
+  }
+  
+- 
+- 
+  ftnint convci(n, s)
+  register int n;
+  register char *s;
+--- 174,179 ----
+***************
+*** 230,237 ****
+  return(t);
+  }
+  
+- 
+- 
+  double convcd(n, s)
+  int n;
+  register char *s;
+--- 202,207 ----
+***************
+*** 250,257 ****
+  return( atof(v) );
+  }
+  
+- 
+- 
+  struct nameblock *mkname(l, s)
+  int l;
+  register char *s;
+--- 220,225 ----
+***************
+*** 288,295 ****
+  return(q);
+  }
+  
+- 
+- 
+  struct labelblock *mklabel(l)
+  ftnint l;
+  {
+--- 256,261 ----
+***************
+*** 356,368 ****
+  return( nextext++ );
+  }
+  
+- 
+- 
+- 
+- 
+- 
+- 
+- 
+  struct addrblock *builtin(t, s)
+  int t;
+  char *s;
+--- 322,327 ----
+***************
+*** 388,395 ****
+  return(q);
+  }
+  
+- 
+- 
+  frchain(p)
+  register chainp *p;
+  {
+--- 347,352 ----
+***************
+*** 405,411 ****
+  *p = 0;
+  }
+  
+- 
+  ptr cpblock(n,p)
+  register int n;
+  register char * p;
+--- 362,367 ----
+***************
+*** 419,426 ****
+  return(q0);
+  }
+  
+- 
+- 
+  max(a,b)
+  int a,b;
+  {
+--- 375,380 ----
+***************
+*** 427,433 ****
+  return( a>b ? a : b);
+  }
+  
+- 
+  ftnint lmax(a, b)
+  ftnint a, b;
+  {
+--- 381,386 ----
+***************
+*** 440,448 ****
+  return(a < b ? a : b);
+  }
+  
+- 
+- 
+- 
+  maxtype(t1, t2)
+  int t1, t2;
+  {
+--- 393,398 ----
+***************
+*** 454,461 ****
+  return(t);
+  }
+  
+- 
+- 
+  /* return log base 2 of n if n a power of 2; otherwise -1 */
+  #if FAMILY == SCJ
+  log2(n)
+--- 404,409 ----
+***************
+*** 474,481 ****
+  }
+  #endif
+  
+- 
+- 
+  frrpl()
+  {
+  struct rplblock *rp;
+--- 422,427 ----
+***************
+*** 488,494 ****
+  	}
+  }
+  
+- 
+  popstack(p)
+  register chainp *p;
+  {
+--- 434,439 ----
+***************
+*** 501,508 ****
+  *p = q;
+  }
+  
+- 
+- 
+  struct exprblock *callk(type, name, args)
+  int type;
+  char *name;
+--- 446,451 ----
+***************
+*** 515,522 ****
+  return(p);
+  }
+  
+- 
+- 
+  struct exprblock *call4(type, name, arg1, arg2, arg3, arg4)
+  int type;
+  char *name;
+--- 458,463 ----
+***************
+*** 527,535 ****
+  return( callk(type, name, args) );
+  }
+  
+- 
+- 
+- 
+  struct exprblock *call3(type, name, arg1, arg2, arg3)
+  int type;
+  char *name;
+--- 468,473 ----
+***************
+*** 540,549 ****
+  return( callk(type, name, args) );
+  }
+  
+- 
+- 
+- 
+- 
+  struct exprblock *call2(type, name, arg1, arg2)
+  int type;
+  char *name;
+--- 478,483 ----
+***************
+*** 555,563 ****
+  return( callk(type,name, args) );
+  }
+  
+- 
+- 
+- 
+  struct exprblock *call1(type, name, arg)
+  int type;
+  char *name;
+--- 489,494 ----
+***************
+*** 566,572 ****
+  return( callk(type,name, mklist(mkchain(arg,0)) ));
+  }
+  
+- 
+  struct exprblock *call0(type, name)
+  int type;
+  char *name;
+--- 497,502 ----
+***************
+*** 574,581 ****
+  return( callk(type, name, NULL) );
+  }
+  
+- 
+- 
+  struct impldoblock *mkiodo(dospec, list)
+  chainp dospec, list;
+  {
+--- 504,509 ----
+***************
+*** 588,601 ****
+  return(q);
+  }
+  
+- 
+- 
+- 
+  ptr ckalloc(n)
+  register int n;
+  {
+  register ptr p;
+! ptr calloc();
+  
+  if( p = calloc(1, (unsigned) n) )
+  	return(p);
+--- 516,532 ----
+  return(q);
+  }
+  
+  ptr ckalloc(n)
+  register int n;
+  {
+  register ptr p;
+! /*
+!  * exstop calls with 0 if the argument to STOP is missing or not a constant.
+!  * calloc/malloc return NULL if passed 0. This was causing an erroneous 
+!  * "out of memory" error.
+! */
+! if (n == 0)
+!    n = 1;
+  
+  if( p = calloc(1, (unsigned) n) )
+  	return(p);
+***************
+*** 604,613 ****
+  /* NOTREACHED */
+  }
+  
+- 
+- 
+- 
+- 
+  isaddr(p)
+  register expptr p;
+  {
+--- 535,540 ----
+***************
+*** 626,635 ****
+  return(NO);
+  }
+  
+- 
+- 
+- 
+- 
+  addressable(p)
+  register expptr p;
+  {
+--- 553,558 ----
+***************
+*** 645,652 ****
+  		return(NO);
+  	}
+  }
+- 
+- 
+  
+  hextoi(c)
+  register int c;
+--- 568,573 ----
+*** ./usr/src/usr.bin/f77/putdmr.c.old	Tue Jan  7 22:49:11 2020
+--- ./usr/src/usr.bin/f77/putdmr.c	Sat Feb  8 11:35:28 2020
+***************
+*** 1,3 ****
+--- 1,7 ----
++ #if     defined(DOSCCS) && !defined(lint)
++ static char *sccsid = "@(#)putdmr.c 2.0 (2.11BSD) 2020/2/8";
++ #endif
++ 
+  /*  INTERMEDIATE CODE GENERATION FOR D. M. RITCHIE C COMPILERS */
+  
+  #include "defs"
+***************
+*** 1209,1211 ****
+--- 1213,1216 ----
+  		putx( offp );
+  	p2op2(P2PLUS, type);
+  	}
++ }
+*** ./usr/src/usr.bin/f77/error.c.old	Sat Oct 26 00:44:29 1996
+--- ./usr/src/usr.bin/f77/error.c	Sat Feb  8 19:06:29 2020
+***************
+*** 1,3 ****
+--- 1,7 ----
++ #if     defined(DOSCCS) && !defined(lint)
++ static char *sccsid = "@(#)error.c 2.0 (2.11BSD) 2020/2/8";
++ #endif
++ 
+  #include "defs"
+  #include "string_defs"
+  
+***************
+*** 42,51 ****
+  
+  	    case FATAL1:
+  	    case FATAL:
+- 		if (buf[0] != '\0') {
+- 			fprintf(diagfile, buf, t, u);
+- 			fprintf(diagfile, "\n");
+- 		}
+  		fprintf(diagfile,"f77 compiler error line %d of %s: ", lineno, infname);
+  		fprintf(diagfile,buf,t,u);
+  		fputc('\n',diagfile);
+--- 46,51 ----
+*** ./VERSION.old	Mon Jan 20 20:37:14 2020
+--- ./VERSION	Sat Feb  8 11:40:17 2020
+***************
+*** 1,5 ****
+! Current Patch Level: 461
+! Date: January 21, 2020
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 462
+! Date: February 8, 2020
+  
+  2.11 BSD
+  ============

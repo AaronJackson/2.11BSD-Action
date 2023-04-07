@@ -1,0 +1,1940 @@
+Subject: C compiler prototype redefines static variable, new top(1) program
+Index:	 src/lib/ccom/c03.c,ansi.c src/ucb/top
+
+Description:
+	ANSI C prototype declaraction overwrites static data item declaration.
+
+	top(1) program not present in 2.11BSD
+
+Repeat-By:
+	1) Examine the generated code (cc -S foo.c) from this test case:
+
+-------
+static char *screen;
+
+static void clr_scr(char *screen)
+{
+    memset(screen, ' ', 100);
+}
+
+main()
+    {
+    char *s;
+    screen = s;
+    }
+-------
+
+	Note that the use of screen in main() does not refer to the static
+	data item (_screen) but to the local function argument 4(r5) in
+	clr_scr()
+
+-----bad-----
+_main:
+jsr     r5,csv
+jbr     L4
+L5:~s=177766
+mov     -12(r5),4(r5)
+L6:jmp  cret
+L4:tst  -(sp)
+jbr     L5
+
+------fixed-----
+_main:
+jsr     r5,csv
+jbr     L4
+L5:~s=177766
+mov     -12(r5),_screen
+L6:jmp  cret
+L4:tst  -(sp)
+jbr     L5
+
+	2) Inspection shows there is no top(1) program present in the system.
+
+Fix:
+
+	Thanks to digbyt42@gmail.com for contributing top(1) to the system.
+	The program will be enhanced in the future - email Digby with feedback
+	and feature requests.  
+
+	Thanks for ragge@tethuvudet.se's very fast response to the report of
+	an error in the ANSI prototype handling.   In addition to fixing the
+	reported bugt the ability to parse statement "const int *const 
+	*volatile *c;" was added.  (Something we didn't know we needed ;-))
+
+	This update is somewhat more complicated because not only are files
+	patched but new program sources are being added to the system.  There 
+	is an extra step involved in unpacking the files.
+
+	Cut where indicated and save to a file (/tmp/465).  
+
+	Then
+
+cd /tmp
+sh 465
+sh top.shar
+
+cd /
+patch -p0 < /tmp/465.patch
+
+cd /usr/src/lib/ccom
+make
+make install
+make clean
+
+cd /usr/src/ucb/top
+make
+make install
+make clean
+
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.update.uu.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+#! /bin/sh
+# This is a shell archive, meaning:
+# 1. Remove everything above the #! /bin/sh line.
+# 2. Save the resulting text in a file.
+# 3. Execute the file with /bin/sh (not csh) to create:
+#	465.patch
+#	top.shar
+# This archive created: Tue Mar 10 07:58:00 2020
+export PATH; PATH=/bin:/usr/bin:$PATH
+if test -f '465.patch'
+then
+	echo shar: "will not over-write existing file '465.patch'"
+else
+sed 's/^X//' << \SHAR_EOF > '465.patch'
+X*** ./usr/src/lib/ccom/c03.c.old	Tue Jan  7 13:22:29 2020
+X--- ./usr/src/lib/ccom/c03.c	Mon Mar  9 19:05:10 2020
+X***************
+X*** 582,588 ****
+X  
+X  	defsym = 0;
+X  	type = 0;
+X! 	switch(o=symbol()) {
+X  
+X  	case TIMES:
+X  		type = getype(dimp, absname);
+X--- 582,592 ----
+X  
+X  	defsym = 0;
+X  	type = 0;
+X! more:	switch(o=symbol()) {
+X! 	case KEYW:
+X! 		if (cval == CONST || cval == VOLATIL)
+X! 			goto more;
+X! 		break;
+X  
+X  	case TIMES:
+X  		type = getype(dimp, absname);
+X*** ./usr/src/lib/ccom/ansi.c.old	Tue Jan  7 13:19:58 2020
+X--- ./usr/src/lib/ccom/ansi.c	Mon Mar  9 19:05:10 2020
+X***************
+X*** 81,86 ****
+X--- 81,88 ----
+X  		 * For other declarations, fake an auto variable.
+X  		 */
+X  		if (blklev == 1 && defsym) {
+X+ 			if (defsym->hblklev < blklev)
+X+ 				defsym = pushdecl(defsym);
+X  			if (paraml==NULL)
+X  				paraml = defsym;
+X  			else
+X*** ./usr/src/ucb/Makefile.old	Fri Oct 13 23:54:55 2000
+X--- ./usr/src/ucb/Makefile	Wed Mar  4 20:18:10 2020
+X***************
+X*** 3,9 ****
+X  # All rights reserved.  The Berkeley software License Agreement
+X  # specifies the terms and conditions for redistribution.
+X  #
+X! #	@(#)Makefile	5.17.5 (2.11BSD) 2000/5/17
+X  #
+X  DESTDIR=
+X  CFLAGS=	-O
+X--- 3,9 ----
+X  # All rights reserved.  The Berkeley software License Agreement
+X  # specifies the terms and conditions for redistribution.
+X  #
+X! #	@(#)Makefile	5.18 (2.11BSD) 2020/3/4
+X  #
+X  DESTDIR=
+X  CFLAGS=	-O
+X***************
+X*** 13,19 ****
+X  #
+X  SUBDIR=	Mail compress dbx error ex finger fp ftp indent lock man \
+X  	more msgs netstat pascal rdist rlogin sendbug talk tftp \
+X! 	tn3270 tset vgrind vlp window
+X  
+X  # Shell scripts that need only be installed and are never removed.
+X  #
+X--- 13,19 ----
+X  #
+X  SUBDIR=	Mail compress dbx error ex finger fp ftp indent lock man \
+X  	more msgs netstat pascal rdist rlogin sendbug talk tftp \
+X! 	tn3270 top tset vgrind vlp window
+X  
+X  # Shell scripts that need only be installed and are never removed.
+X  #
+X*** ./VERSION.old	Thu Mar  5 20:57:06 2020
+X--- ./VERSION	Tue Mar 10 07:29:50 2020
+X***************
+X*** 1,5 ****
+X! Current Patch Level: 464
+X! Date: March 5, 2020
+X  
+X  2.11 BSD
+X  ============
+X--- 1,5 ----
+X! Current Patch Level: 465
+X! Date: March 10, 2020
+X  
+X  2.11 BSD
+X  ============
+SHAR_EOF
+fi
+if test -f 'top.shar'
+then
+	echo shar: "will not over-write existing file 'top.shar'"
+else
+sed 's/^X//' << \SHAR_EOF > 'top.shar'
+X#! /bin/sh
+X# This is a shell archive, meaning:
+X# 1. Remove everything above the #! /bin/sh line.
+X# 2. Save the resulting text in a file.
+X# 3. Execute the file with /bin/sh (not csh) to create:
+X#	/usr/src/ucb/top
+X# This archive created: Tue Mar 10 07:49:33 2020
+Xexport PATH; PATH=/bin:/usr/bin:$PATH
+Xif test ! -d '/usr/src/ucb/top'
+Xthen
+X	mkdir '/usr/src/ucb/top'
+Xfi
+Xcd '/usr/src/ucb/top'
+Xif test -f 'top.c'
+Xthen
+X	echo shar: "will not over-write existing file 'top.c'"
+Xelse
+Xsed 's/^Z//' << \SHAR_EOF > 'top.c'
+XZ/*
+XZ * Display processes in order of CPU utilization
+XZ *
+XZ * Implemented for 2.11 BSD to evaluate mechanisems for accessing
+XZ * system system state from user mode.
+XZ * Process information access is modeled on mechanism used by ps(1)
+XZ * in particular, makes use of the cached static information in
+XZ *  /var/run/psdatabase
+XZ * which is generated for the ps program at system boot
+XZ *
+XZ * Digby Tarvin 
+XZ *  December 2019.
+XZ *
+XZ * History
+XZ * =======
+XZ * Ed Date       What                                             Who
+XZ * -- ---------- -----------------------------------------------  ----
+XZ * 01 05/12/2019 Written                                          DRST
+XZ * 02 07/03/2020 Removed kmem based nswap access (sysctl updated) DRST
+XZ * 03 09/03/2020 added BADKEY_IGNORE, delay spec now in seconds   DRST
+XZ *
+XZ */
+XZ/*
+XZ * Using RAW removes the need for signal processing, but adds a requirement
+XZ * to process NL -> CRNL mapping etc. Choose your preference...
+XZ */
+XZ#define TTY_RAW    	0	/* use RAW/!CBRK for terminal */
+XZ#define BADKEY_IGNORE	1	/* no abort on invalid commands */
+XZ
+XZ#include <stdio.h>
+XZ#include <unistd.h>	/* usleep */
+XZ#include <stdlib.h>	/* getopt */
+XZ#include <sys/param.h>	/* NGROUPS */
+XZ#include <sys/sysctl.h>	/* boottime,.. */
+XZ#include <ctype.h>	/* isdigit */
+XZ#include <sys/file.h>	/* lseek */
+XZ#include <sys/stat.h>	/* struct stat */
+XZ#include <sys/user.h>	/* MAXCOMLEN */
+XZ#include <sys/proc.h>	/* struct proc */
+XZ#include <sys/types.h>
+XZ#include <sys/time.h>	/* select() */
+XZ#include <sys/select.h>	/* select() */
+XZ#include <sys/signal.h>	/* select() */
+XZ#include <sys/ioctl.h>	/* winsize, TIOCGETP */
+XZ#include <ctype.h>	/* isdigit() */
+XZ#include <pwd.h>
+XZ#include <utmp.h>	/* PS_NAMESIZE, _PATH_UTMP */
+XZ#include <curses.h>
+XZ#include "psdb.h"
+XZ
+XZ#define LOCAL	static
+XZ#define EXPORT	/**/
+XZ
+XZ#define DIV60(t)	((t+30)/60)	/* x/60 rounded */
+XZtypedef struct udata_s
+XZ{
+XZ	dev_t	o_ttyd;		/* u_ttyd */
+XZ	char	o_tty[3];	/* 1st 2 chars of tty after 'tty' */
+XZ	char	*o_uname;	/* login name of process owner */
+XZ	time_t	o_utime;	/* u_utime */
+XZ	time_t	o_stime;	/* u_stime */
+XZ	time_t	o_cutime;	/* u_cutime */
+XZ	time_t	o_cstime;	/* u_cstime */
+XZ	time_t	o_ttime;	/* u_utime + u_stime */
+XZ	time_t	o_dtime;	/* o_ttime - o_LastTime */
+XZ	int	o_sigs;		/* sum of SIGINT & SIGQUIT (2 => ignore both) */
+XZ	size_t	o_tsize;	/* text size */
+XZ	int	o_increment;	/* current - last */
+XZ	char	o_comm[MAXCOMLEN+1];	/* u_comm */
+XZ	char	*o_args;	/* best guess at args to process */
+XZ	long	o_nswap;	/* swaps */
+XZ	long	o_nvcsw;	/* voluntary context switches */
+XZ	long	o_nicsw;	/* involuntary " */
+XZ	/*
+XZ	 * details from last update
+XZ	 */
+XZ	short	o_LastPid;	/* last pid in this slot */
+XZ	short	o_LastStat;	/* is previous process data valid? */
+XZ	time_t	o_LastTime;	/* time at last update */
+XZ} udata_t;
+XZ
+XZ#define DRATE	(1000000)	/* default delay between updates (us) */
+XZ#define MAXUSER	10		/* user names to cache */
+XZ
+XZLOCAL struct userdb_s
+XZ{
+XZ	char	uname[UT_NAMESIZE];
+XZ	short	uid;
+XZ} untab[MAXUSER];
+XZ
+XZ
+XZLOCAL long		upd_us = DRATE;	/* delay between updates */
+XZLOCAL struct proc	*proctab;	/* buffer to contain proc array */
+XZLOCAL int		ptsz = 0;	/* size of proc array */
+XZLOCAL int		*procidx;	/* indirect array for proc access */
+XZLOCAL struct udata_s	*userdata;	/* process information from u */
+XZ
+XZLOCAL char		xflg;
+XZLOCAL char		gflg;
+XZLOCAL char		*tptr;
+XZLOCAL char		*memf	= "/dev/mem";
+XZLOCAL char		*kmemf	= "/dev/kmem";
+XZLOCAL char		*swapf	= "/dev/swap";
+XZ
+XZLOCAL int		kmem;
+XZLOCAL int		mem;
+XZLOCAL int		swap;
+XZLOCAL u_int		nproc;
+XZLOCAL int		hz;
+XZLOCAL float		fhz;
+XZLOCAL int		done = 0;
+XZLOCAL struct tchars	tc;	/* determine t_intrc and t_quitc */
+XZ
+XZ/* system stats */
+XZLOCAL time_t		now;
+XZLOCAL struct tm		*ltp;
+XZLOCAL struct timeval	boottime;
+XZLOCAL time_t		uptime;
+XZLOCAL FILE		*ut;
+XZLOCAL struct utmp	utmp;
+XZLOCAL int		nusers;
+XZLOCAL double		avenrun[3];
+XZ
+XZLOCAL struct  map_s
+XZ{
+XZ        off_t   b1, e1;
+XZ	off_t   f1;
+XZ        off_t   b2, e2;
+XZ	off_t   f2;
+XZ} datmap;
+XZ/*
+XZ * Screen Management
+XZ */
+XZLOCAL struct winsize	win;
+XZLOCAL int 		lines, columns;
+XZLOCAL char		*CMOV;      /* Cursor Movement */
+XZLOCAL char		*CLEARSCR;  /* Clear Screen */
+XZLOCAL char		*US;        /* Start underscore mode */
+XZLOCAL char		*UE;        /* End underscore mode */
+XZ
+XZLOCAL char      	*UP;         /* Upline (cursor up) */
+XZLOCAL char      	*BC;         /* Backspace if not ^H */
+XZLOCAL char		*VE;         /* cursor normal */
+XZLOCAL char		*VI;         /* cursor invisible */
+XZ
+XZLOCAL short  		ospeed;         /* output speed */
+XZLOCAL char       	PC_;        /* Pad Character */
+XZ
+XZ#if TTY_RAW
+XZLOCAL char		NewLine[] = "\r\n";
+XZ#else
+XZLOCAL char		NewLine[] = "\n";
+XZ#endif
+XZchar        *tgetstr();
+XZchar        *tgoto();
+XZ/*
+XZ * write character routine for tputs
+XZ */
+XZstatic void ttout(c)
+XZchar	c;
+XZ{
+XZ    putchar(c);
+XZ}
+XZ
+XZLOCAL int error(s)
+XZchar *s;
+XZ{
+XZ	fprintf(stderr, "error - %s%s", s, NewLine);
+XZ	return(-1);
+XZ}
+XZ
+XZ
+XZstatic int ttcom(c)
+XZchar c;
+XZ{
+XZ    ttout(c);
+XZ}
+XZ
+XZ#if 1
+XZstatic void dial(dline,dcol)
+XZint dline, dcol;
+XZ{
+XZ    static      int odline, odcol;
+XZ    char        *sptr;
+XZ
+XZ    if(odline == dline && odcol == (dcol-1))
+XZ    {
+XZ        odcol++;
+XZ        return;
+XZ    }
+XZ    if((odline == (dline-1)) && dcol == 0)
+XZ        ttout('\n');
+XZ    else 
+XZ    {
+XZ        sptr = tgoto(CMOV, dcol % columns, dline % lines);
+XZ        tputs(sptr, 1, ttcom);
+XZ    }
+XZ    odline = dline;
+XZ    odcol = dcol;
+XZ}
+XZ#endif
+XZstatic int tcinit()
+XZ{
+XZ    char        bp[1024];
+XZ    static char capbuff[100];
+XZ    char        *buffp = capbuff;
+XZ
+XZ    if(tgetent(bp, (char *)getenv("TERM")) != 1)
+XZ        return(error("no termcap entry"));
+XZ#if 0	/* dont seem to have this?? */
+XZ    VE = buffp;
+XZ    if(tgetstr("ve", &buffp) == NULL)
+XZ	return(error("no cursor normal entry"));
+XZ    VI = buffp;
+XZ    if(tgetstr("vi", &buffp) == NULL)
+XZ	return(error("no cursor invisible entry"));
+XZ#endif
+XZ    CLEARSCR = buffp;
+XZ    if(tgetstr("cl", &buffp) == NULL)
+XZ        return(error("no \"cl\" capability"));
+XZ    CMOV = buffp;
+XZ    if(tgetstr("cm", &buffp) == NULL)
+XZ        return(error("no \"cl\" capability"));
+XZ
+XZ    US = buffp;
+XZ    if((tgetstr("so",&buffp)==NULL)&&(tgetstr("us",&buffp)==NULL))
+XZ       return(error("no hi-light (\"so\" or \"us\") capabilty"));
+XZ    UE = buffp;
+XZ    if((tgetstr("se",&buffp)==NULL)&&(tgetstr("ue",&buffp)==NULL))
+XZ        return(error("No end highlight\n"));
+XZ    UP = tgetstr("up", &buffp);
+XZ    BC = tgetstr("bc", &buffp);
+XZ#ifdef PAD
+XZ/* set up padding characters */
+XZ    if( tgetflag("pc") == 1)
+XZ    {
+XZ        tgetstr("pc", &buffp);
+XZ        PC = *--buffp;
+XZ    }
+XZ    gtty(1, &ttybuff);
+XZ    ospeed = ttybuff.sg_ospeed;
+XZ#endif /* PAD */
+XZ#if 0	/* now using ioctl */
+XZ    if(lines == 0)
+XZ        lines = tgetnum("li");
+XZ    if(columns == 0)
+XZ        columns = tgetnum("co");
+XZ#endif
+XZ}
+XZ
+XZ/*
+XZ * Configure/restore output terminal
+XZ */
+XZLOCAL int config_tty(onoff, lp, cp)
+XZint	onoff;
+XZint	*lp;
+XZint	*cp;
+XZ{
+XZ	static struct sgttyb	smode;	/* saved/original mode */
+XZ	struct sgttyb		nmode;	/* new mode */
+XZ	struct winsize		win;
+XZ
+XZ	if(onoff == 0)
+XZ	{
+XZ		dial(lines-1, 0);
+XZ		printf("\n");
+XZ		ioctl(0, TIOCSETP, &smode);
+XZ		return(0);
+XZ	}
+XZ
+XZ	if(ioctl(1, TIOCGWINSZ, &win) < 0)
+XZ	{
+XZ		perror("ioctl");
+XZ		return(-1);
+XZ	}
+XZ	*lp = win.ws_row;
+XZ	*cp = win.ws_col;
+XZ
+XZ	if(ioctl(0, TIOCGETC, &tc) < 0)
+XZ	{
+XZ		perror("TIOGETC");
+XZ		return(-1);
+XZ	}
+XZ	if(ioctl(0, TIOCGETP, &smode) < 0)
+XZ		return(-1);
+XZ	nmode = smode;
+XZ#if TTY_RAW
+XZ	/* using raw mode eliminates the need for signal handling */
+XZ	nmode.sg_flags |= RAW;
+XZ#else
+XZ	nmode.sg_flags |= CBREAK;
+XZ#endif
+XZ	nmode.sg_flags &= ~ECHO;
+XZ	if(ioctl(0, TIOCSETP, &nmode) < 0)
+XZ		return(-1);
+XZ	return(0);
+XZ}
+XZ
+XZ/*
+XZ * Read from specified location in file
+XZ *  returns 1 on success
+XZ *         -1 on failure
+XZ */
+XZLOCAL int readat(fd, pos, buff, count)
+XZint 		fd;
+XZoff_t		pos;
+XZchar 		*buff;
+XZunsigned short	count;
+XZ{
+XZ	if(lseek(fd, pos, L_SET) == (off_t) -1)
+XZ		return(-1);
+XZ	return((read(fd, buff, count) == count)? 1 : -1);
+XZ}
+XZ
+XZ/*
+XZ ******* Get Information for a process given a proc array entry ********
+XZ */
+XZ#define	within(x,y,z)	(((unsigned)(x) >= (y)) && ((unsigned)(x) < (z)))
+XZ
+XZLOCAL getbyte(adr, file)
+XZregister char	*adr;
+XZint		file;
+XZ{
+XZ	register struct	map_s *amap = &datmap;
+XZ	char	b;
+XZ	off_t	saddr;
+XZ
+XZ	if(!within(adr, amap->b1, amap->e1))
+XZ	{
+XZ		if(within(adr, amap->b2, amap->e2))
+XZ			saddr = (unsigned) adr + amap->f2 - amap->b2;
+XZ		else
+XZ			return(0);
+XZ	}
+XZ	else
+XZ	{
+XZ		saddr	= (unsigned) adr + amap->f1 - amap->b1;
+XZ	}
+XZ	if(lseek(file, saddr, L_SET) == (off_t) -1 || read (file, &b, 1) < 1)
+XZ		return(0);
+XZ	return((unsigned) b);
+XZ}
+XZ
+XZLOCAL char	*
+XZgetptr(adr, file)
+XZchar	**adr;
+XZint	file;
+XZ{
+XZ	char	*ptr = 0;
+XZ	register char	*p, *pa;
+XZ	register int	i;
+XZ
+XZ	pa = (char *)adr;
+XZ	p  = (char *)&ptr;
+XZ	for (i = 0; i < sizeof (ptr); i++)
+XZ		*p++ = getbyte(pa++, file);
+XZ	return(ptr);
+XZ}
+XZ/*
+XZ * Get process command line
+XZ * Passed:
+XZ *	fd   - descriptor for process image (mem or swap as appropriate)
+XZ *	stk  - offset to process stack area (mem or swap in file)
+XZ *	pp   - proc structure for process
+XZ *	a    - pointer to process summary structure to update
+XZ *
+XZ * Returns:
+XZ *	1    - success
+XZ *      0    - failed
+XZ */
+XZ/* amount of top of stack to examine for args */
+XZ#define ARGLIST	(1024/sizeof(int))
+XZ
+XZLOCAL getargs(fd, stk, pp, a, u)
+XZint			fd;
+XZoff_t			stk;
+XZstruct proc		*pp;
+XZregister struct udata_s	*a;
+XZstruct user		*u;
+XZ{
+XZ	register int	*ip;
+XZ	register char	*cp, *cp1;
+XZ	char		c, **ap;
+XZ	int		cc, nbad, abuf[ARGLIST];
+XZ	off_t		pos;
+XZ
+XZ	if(a->o_args == NULL)
+XZ	{
+XZ		if((a->o_args = (char *) malloc(64)) == NULL)
+XZ			return(1);
+XZ	}
+XZ	a->o_args[0] = 0;
+XZ	stk += ctob((off_t) pp->p_ssize) - ARGLIST*sizeof(int);
+XZ
+XZ	/* look for sh special */
+XZ	pos = stk + ARGLIST*sizeof(int) - sizeof (char **);
+XZ	if(readat(fd, pos, (char *)&ap, sizeof(char *)) < 0)
+XZ		return(1);
+XZ
+XZ	if(ap)
+XZ	{
+XZ		char	b[82];
+XZ		char	*bp	= b;
+XZ		while((cp = getptr(ap++, fd)) && cp && (bp < b+sizeof (a->o_args)) )
+XZ		{
+XZ			nbad	= 0;
+XZ			while( (c = getbyte(cp++, fd))&&(bp < b+sizeof (a->o_args)))
+XZ			{
+XZ				if(c<' ' || c > '~')
+XZ				{
+XZ					if(nbad++ > 3)
+XZ						break;
+XZ					continue;
+XZ				}
+XZ				*bp++ = c;
+XZ			}
+XZ			*bp++ = ' ';
+XZ		}
+XZ		*bp++ = 0;
+XZ		(void)strcpy(a->o_args, b);
+XZ		return(1);
+XZ	}
+XZ
+XZ	if(readat(fd, stk, (char *) abuf, sizeof (abuf)) < 0)
+XZ		return(1);
+XZ
+XZ	abuf[ARGLIST-1]	= 0;
+XZ	for(ip = &abuf[ARGLIST-2]; ip > abuf;)
+XZ	{
+XZ		if(*--ip == -1 || *ip == 0)
+XZ		{
+XZ			cp = (char *) (ip + 1);
+XZ			if(*cp == '\0')
+XZ				cp++;
+XZ			nbad = 0;
+XZ			for (cp1 = cp; cp1 < (char *) &abuf[ARGLIST]; cp1++)
+XZ			{
+XZ				cc = *cp1 & 0177;
+XZ				if(cc == 0)
+XZ					*cp1 = ' ';
+XZ				else if(cc < ' ' || cc > 0176)
+XZ				{
+XZ					if(++nbad >= 5)
+XZ					{
+XZ						*cp1++	= ' ';
+XZ						break;
+XZ					}
+XZ					*cp1 = '?';
+XZ				}
+XZ				else if(cc == '=')
+XZ				{
+XZ					*cp1 = '\0';
+XZ					while(cp1 > cp && *--cp1 != ' ')
+XZ						*cp1 = '\0';
+XZ					break;
+XZ				}
+XZ			}
+XZ			while(*--cp1 == ' ')
+XZ				*cp1 = 0;
+XZ
+XZ			(void)strcpy(a->o_args, cp);
+XZgarbage:
+XZ			cp = a->o_args;
+XZ			if(cp[0] == '-'&&cp[1]<=' '||cp[0]=='?'||cp[0]<=' ')
+XZ			{
+XZ				strcat(cp, " (");
+XZ				strcat(cp, u->u_comm);
+XZ				strcat(cp, ")");
+XZ			}
+XZ			cp[63] = 0;	/* max room in udata_s is 64 chars */
+XZ			if(xflg || gflg || tptr || cp[0] != '-')
+XZ				return(1);
+XZ			return(0);
+XZ		}
+XZ	}
+XZ	goto garbage;
+XZ}
+XZ
+XZLOCAL char *
+XZgettty(ttyp, ttyd)
+XZstruct tty	*ttyp;
+XZdev_t		ttyd;
+XZ{
+XZ	register int tty_step;
+XZ	register char *p = "?";
+XZ
+XZ	if(ttyp == NULL)
+XZ		return(p);
+XZ
+XZ	for(tty_step = 0;tty_step < nttys; ++tty_step)
+XZ		if(ttlist[tty_step].ttyd == ttyd)
+XZ		{
+XZ			p = ttlist[tty_step].name;
+XZ			if(!strncmp(p,"tty",3))
+XZ				p += 3;
+XZ		}
+XZ
+XZ	return(p);
+XZ}
+XZ/*
+XZ * Save process information to udata_s structure
+XZ */
+XZ
+XZLOCAL int fuser(idx, uid)
+XZint	idx;
+XZshort	uid;
+XZ{
+XZ	register struct passwd *pw;
+XZ
+XZ	if((pw = getpwuid(uid)) == NULL)
+XZ		return(-1);
+XZ	untab[idx].uid = uid;
+XZ	strcpy(untab[idx].uname, pw->pw_name);
+XZ	return(1);
+XZ}
+XZ
+XZ#define	round(x,y) ((long) ((((long) (x) + (long) (y) - 1L) / (long) (y)) * (long) (y)))
+XZ
+XZLOCAL getu(pp, a, noargs)
+XZstruct proc	*pp;
+XZstruct udata_s	*a;
+XZchar		noargs;
+XZ{
+XZ	char			*tp;
+XZ	off_t			addr;
+XZ	off_t			daddr;
+XZ	off_t			saddr;
+XZ	struct user		user;		/* for reading user structs */
+XZ	register struct	user	*up	= &user;
+XZ	register struct	proc	*procp	= pp;
+XZ	long			txtsiz, datsiz, stksiz;
+XZ	int			septxt;
+XZ	int			pifile;
+XZ	int			i;
+XZ
+XZ	if(procp->p_flag & SLOAD)	/* in memory */
+XZ	{
+XZ		addr = ctob((off_t) procp->p_addr);
+XZ		daddr = ctob((off_t) procp->p_daddr);
+XZ		saddr = ctob((off_t) procp->p_saddr);
+XZ		pifile = mem;
+XZ	}
+XZ	else				/* swapped */
+XZ	{
+XZ		addr = (off_t)procp->p_addr << 9;
+XZ		daddr = (off_t)procp->p_daddr << 9;
+XZ		saddr = (off_t)procp->p_saddr << 9;
+XZ		pifile = swap;
+XZ	}
+XZ
+XZ	if(readat(pifile, addr, (char *) up, sizeof(user)) < 0)
+XZ	{
+XZ		perror("read");
+XZ		return(0);
+XZ	}
+XZ
+XZ	txtsiz		= ctob(up->u_tsize);	/* address maps for usr pcs */
+XZ	datsiz		= ctob(up->u_dsize);
+XZ	stksiz		= ctob(up->u_ssize);
+XZ	septxt		= up->u_sep;
+XZ	datmap.b1	= (septxt ?  0 : round(txtsiz, TXTRNDSIZ));
+XZ	datmap.e1	= datmap.b1 + datsiz;
+XZ	datmap.f1	= daddr;
+XZ	datmap.f2	= saddr;
+XZ	datmap.b2	= stackbas(stksiz);
+XZ	datmap.e2	= stacktop(stksiz);
+XZ	tp		= gettty(up->u_ttyp, up->u_ttyd);
+XZ	strncpy(a->o_tty, tp, sizeof (a->o_tty));
+XZ	a->o_ttyd	= tp[0] == '?' ?  -1 : up->u_ttyd;
+XZ	if(procp->p_stat == SZOMB)
+XZ		return(1);
+XZ
+XZ	a->o_tsize	= up->u_tsize;
+XZ	a->o_utime	= up->u_ru.ru_utime;
+XZ	a->o_stime	= up->u_ru.ru_stime;
+XZ	a->o_nswap	= up->u_ru.ru_nswap;
+XZ	a->o_nvcsw	= up->u_ru.ru_nvcsw;
+XZ	a->o_nicsw	= up->u_ru.ru_nivcsw;
+XZ	a->o_cutime	= up->u_cru.ru_utime;
+XZ	a->o_cstime	= up->u_cru.ru_stime;
+XZ	a->o_ttime	= a->o_utime + a->o_stime + a->o_cutime + a->o_cstime;
+XZ	a->o_sigs	= (int)up->u_signal[SIGINT]+(int)up->u_signal[SIGQUIT];
+XZ	if(a->o_LastStat && (pp->p_pid == a->o_LastPid))
+XZ		a->o_dtime = a->o_ttime - a->o_LastTime;
+XZ	else
+XZ		a->o_dtime = a->o_ttime;
+XZ
+XZ	a->o_uname	= NULL;
+XZ	for(i = 0; i < MAXUSER; i++)
+XZ	{
+XZ		if(untab[i].uname[0] == 0)
+XZ			break;
+XZ		if(untab[i].uid == procp->p_uid)
+XZ		{
+XZ			a->o_uname = untab[i].uname;
+XZ			break;
+XZ		}
+XZ	}
+XZ	if((a->o_uname == NULL) && (i< MAXUSER))
+XZ	{
+XZ		/* name not found and space in table */
+XZ		if(fuser(i, procp->p_uid) >= 0)
+XZ			a->o_uname = untab[i].uname;	
+XZ	}
+XZ
+XZ	strncpy(a->o_comm, up->u_comm, MAXCOMLEN);
+XZ
+XZ	if(noargs)
+XZ		return(1);
+XZ	return(getargs(pifile, saddr, pp, a, up));
+XZ}
+XZ/*
+XZ * Compare function for process sorting
+XZ */
+XZLOCAL int sortcmp(i1, i2)
+XZregister int *i1, *i2;
+XZ{
+XZ	time_t 	usage1, usage2;
+XZ
+XZ	usage1 = userdata[*i1].o_dtime;
+XZ	usage2 = userdata[*i2].o_dtime;
+XZ	if(usage1 != usage2)
+XZ		return((usage2>usage1)? 1:-1);
+XZ	usage1 = userdata[*i1].o_ttime;
+XZ	usage2 = userdata[*i2].o_ttime;
+XZ	if(usage1 != usage2)
+XZ		return((usage2>usage1)? 1:-1);
+XZ	return(0);
+XZ}
+XZ/*
+XZ * Update the process list
+XZ */
+XZLOCAL int update()
+XZ{
+XZ	int	np;
+XZ	int	i;
+XZ
+XZ	/*
+XZ	 * before over-writing old proc structure,
+XZ	 * 	record old stat and if applicable, pid and ttime 
+XZ	 */
+XZ	for(i = 0; i < nproc; i++)
+XZ	{
+XZ		struct proc 		*procp	= &proctab[i];
+XZ		register struct	udata_s	*up	= &userdata[i];
+XZ
+XZ		if((up->o_LastStat = procp->p_stat) != 0)
+XZ		{
+XZ			up->o_LastTime	= up->o_ttime;
+XZ			up->o_LastPid	= procp->p_pid;
+XZ		}
+XZ	}
+XZ
+XZ	/* read the current proc table into buffer */
+XZ	if(readat(kmem, (off_t) proc_sym, proctab, ptsz) < 0)
+XZ	{
+XZ		fprintf(stderr, "Error reading process table\n");
+XZ		return(1);
+XZ	}
+XZ
+XZ	for(np = i = 0; i < nproc; i++)
+XZ	{
+XZ		struct proc *procp = &proctab[i];
+XZ
+XZ		if(procp->p_stat == 0)
+XZ			continue;
+XZ
+XZ		if(getu(procp, &userdata[i], 1) == 0)
+XZ		{
+XZ			fprintf(stderr, "Error getting process %d uinf\n",
+XZ				procp->p_pid);
+XZ			continue;
+XZ		}
+XZ		procidx[np] = i;
+XZ		np++;
+XZ	}
+XZ	return(np);
+XZ}
+XZ
+XZLOCAL char states[] = { '?', 'S', 'W', 'R', 'I', 'Z', 'T' };
+XZ
+XZLOCAL void printw(w, s)
+XZint	w;
+XZchar	*s;
+XZ{
+XZ	while(w-- > 0)
+XZ	{
+XZ		char c = ' ';
+XZ		if(*s)
+XZ			c = *s++;
+XZ		putchar(c);
+XZ	}
+XZ}
+XZ/*
+XZ * Get Memory Statistics for summary lines
+XZ * Returns:
+XZ *   totmem  - total physical memory in bytes
+XZ *   freemem - available memory in bytes
+XZ */
+XZLOCAL int GetMemStats(totmem, freemem)
+XZlong *totmem;
+XZlong *freemem;
+XZ{
+XZ	int		mib[2];
+XZ	size_t		size;
+XZ	static size_t	cmsz	= 0;
+XZ	static long 	physmem	= 0;
+XZ	static char	*coremap = NULL;
+XZ	struct mapent	*map;
+XZ	int		i;
+XZ	long		tfree;
+XZ
+XZ	if(physmem == 0)
+XZ	{
+XZ		/* first call - get static values */
+XZ		mib[0] = CTL_HW;
+XZ		mib[1] = HW_PHYSMEM;
+XZ		size = sizeof(physmem);
+XZ		if(sysctl(mib, 2, &physmem, &size, NULL, 0) == -1)
+XZ		{
+XZ			perror("PHYSMEM");
+XZ			printf("\n");
+XZ			return(-1);
+XZ		}
+XZ		mib[0] = CTL_VM;
+XZ		mib[1] = VM_COREMAP;
+XZ		if(sysctl(mib, 2, NULL, &cmsz, NULL, 0) == -1)
+XZ		{
+XZ			perror("COREMAP");
+XZ			printf("\n");
+XZ			return(-1);
+XZ		}
+XZ		if((coremap = (char *)malloc((unsigned)cmsz)) == NULL)
+XZ		{
+XZ			perror("COREMAP");
+XZ			printf("\n");
+XZ			exit(1);
+XZ		}
+XZ		memset(coremap, 0, cmsz);
+XZ	}
+XZ	mib[0] = CTL_VM;
+XZ	mib[1] = VM_COREMAP;
+XZ	size = cmsz;
+XZ	if(sysctl(mib, 2, coremap, &size, NULL, 0) == -1)
+XZ	{
+XZ		perror("COREMAP2");
+XZ		printf("\n");
+XZ		return(-1);
+XZ	}
+XZ	
+XZ	map = (struct mapent *)coremap;
+XZ	for(tfree = i = 0; i < cmsz / sizeof(struct mapent); i++)
+XZ		tfree += map[i].m_size;
+XZ	*totmem = physmem;
+XZ	*freemem = (long) tfree*64;
+XZ	return(0);
+XZ}
+XZ
+XZ/*
+XZ * Get Swap Statistics for summary lines
+XZ * Returns:
+XZ *   totmem  - total physical memory in bytes
+XZ *   freemem - available memory in bytes
+XZ */
+XZ
+XZLOCAL int GetSwapStats(totswap, freeswap)
+XZlong *totswap;
+XZlong *freeswap;
+XZ{
+XZ	int		mib[2];
+XZ	size_t		size;
+XZ	static size_t	smsz	= 0;
+XZ	static long 	nswap	= 0;
+XZ	static char	*swapmap = NULL;
+XZ	struct mapent	*map;
+XZ	int		i;
+XZ	long		tfree;
+XZ
+XZ	if(nswap == 0)
+XZ	{
+XZ		/* first call - get static values */
+XZ		mib[0] = CTL_VM;
+XZ		mib[1] = VM_NSWAP;
+XZ		size = sizeof(i);
+XZ		if(sysctl(mib, 2, &i, &size, NULL, 0) == -1)
+XZ		{
+XZ			perror("NSWAP");
+XZ			printf("\n");
+XZ			return(-1);
+XZ		}
+XZ		nswap = i;
+XZ		mib[0] = CTL_VM;
+XZ		mib[1] = VM_SWAPMAP;
+XZ		if(sysctl(mib, 2, NULL, &smsz, NULL, 0) == -1)
+XZ		{
+XZ			perror("SWAPMAP");
+XZ			printf("\n");
+XZ			return(-1);
+XZ		}
+XZ		if((swapmap = (char *)malloc((unsigned)smsz)) == NULL)
+XZ		{
+XZ			perror("SWAPMAP");
+XZ			printf("\n");
+XZ			exit(1);
+XZ		}
+XZ		memset(swapmap, 0, smsz);
+XZ	}
+XZ	mib[0] = CTL_VM;
+XZ	mib[1] = VM_SWAPMAP;
+XZ	size = smsz;
+XZ	if(sysctl(mib, 2, swapmap, &size, NULL, 0) == -1)
+XZ	{
+XZ		perror("SWAPMAP2");
+XZ		printf("\n");
+XZ		return(-1);
+XZ	}
+XZ	
+XZ	map = (struct mapent *)swapmap;
+XZ	for(tfree = i = 0; i < smsz / sizeof(struct mapent); i++)
+XZ		tfree += map[i].m_size;
+XZ	*totswap = nswap*512;
+XZ	*freeswap = (long) tfree*512;
+XZ	return(0);
+XZ}
+XZ
+XZ/*
+XZ * Show summary stats
+XZ */
+XZLOCAL void
+XZshow_stats(npr)
+XZint npr;
+XZ{
+XZ	int	i, run, sleep, stop, zombie;
+XZ	static int calls = 0;
+XZ	int	mib[2];
+XZ	size_t	size;
+XZ	long	memsize, memfree;
+XZ	long	swapsize, swapfree;
+XZ
+XZ	/* get time */
+XZ	time(&now);
+XZ	ltp = localtime(&now);
+XZ	printf("top - %02d:%02d:%02d", ltp->tm_hour, ltp->tm_min, ltp->tm_sec);
+XZ
+XZ	/* get uptime */
+XZ
+XZ	mib[0] = CTL_KERN;
+XZ	mib[1] = KERN_BOOTTIME;
+XZ	size = sizeof(boottime);
+XZ	if(sysctl(mib, 2, &boottime, &size, NULL, 0) != -1 &&
+XZ		boottime.tv_sec != 0)
+XZ	{
+XZ		int	days, hrs, mins;
+XZ
+XZ		uptime = now - boottime.tv_sec;
+XZ		days = uptime / (60L*60L*24L);
+XZ		uptime %= (60L*60L*24L);
+XZ		hrs = uptime / (60L*60L);
+XZ		uptime %= (60L*60L);
+XZ		mins = DIV60(uptime);
+XZ
+XZ		printf(" up %2d day%s", days, days != 1?"s":"");
+XZ		printf(", %2d:%02d", hrs, mins);
+XZ	}
+XZ
+XZ	/* get user count */
+XZ
+XZ	nusers = 0;
+XZ	while(fread(&utmp, sizeof(utmp), 1, ut))
+XZ		if(utmp.ut_name[0] != '\0')
+XZ			nusers++;
+XZ	rewind(ut);
+XZ	printf(", %3d user%c", nusers, nusers > 1? 's': '\0');
+XZ
+XZ	/* load average */
+XZ	if(getloadavg(avenrun, sizeof(avenrun)/sizeof(avenrun[0])) == -1)
+XZ		printf(", no load average information available");
+XZ	else
+XZ	{
+XZ		int	i;
+XZ		printf(",  load average:");
+XZ		for(i = 0; i < (sizeof(avenrun)/sizeof(avenrun[0])); i++)
+XZ		{
+XZ			if(i > 0)
+XZ				printf(",");
+XZ			printf(" %.2f", avenrun[i]);
+XZ		}
+XZ	}
+XZ	printf(NewLine);
+XZ	/* process status summary */
+XZ	run = sleep = stop = zombie = 0;
+XZ	for(i = 0; i < npr; i++)
+XZ	{
+XZ		register struct proc	*p = &proctab[procidx[i]];
+XZ		switch(p->p_stat)
+XZ		{
+XZ			case SSLEEP: sleep++;  break;
+XZ			case SWAIT:  sleep++;  break;
+XZ			case SRUN:   run++;    break;
+XZ			case SIDL:   run++;    break;
+XZ			case SZOMB:  zombie++; break;
+XZ			case SSTOP:  stop++;   break;
+XZ/*			case 0:      run++;    break; /* ?? */
+XZ			default:
+XZ				zombie++; /* shouldn't happen */
+XZ		}
+XZ	}
+XZ	printf("Tasks:%4d total, %3d running,", npr, run);
+XZ	printf(" %4d sleeping, %3d stopped, %3d zombie",
+XZ		sleep, stop, zombie);
+XZ	printf(NewLine);
+XZ
+XZ	/* Memory and Swap status */
+XZ
+XZ	if(GetMemStats(&memsize, &memfree) < 0)
+XZ		return;
+XZ	if(GetSwapStats(&swapsize, &swapfree) < 0)
+XZ		return;
+XZ	/* 2.11 BSD has static buffer cache so no need to display this */	
+XZ	printf("    Mem : %8ld total, %8ld free, %8ld used (%2ld%%)%s",
+XZ		memsize, memfree, memsize-memfree,
+XZ		(memsize-memfree)*100L/memsize, NewLine);
+XZ	printf("    Swap: %8ld total, %8ld free, %8ld used (%2ld%%)%s", 
+XZ		swapsize, swapfree, swapsize-swapfree,
+XZ		(swapsize-swapfree)*100L/swapsize, NewLine);
+XZ}
+XZ/*
+XZ * show heading information
+XZ */
+XZLOCAL void
+XZshow_titles()
+XZ{
+XZ	tputs(US, 1, ttcom);
+XZ	printw(columns, "  PID USER      PR  NI  TEXT  DATA STACK S     TIME   DTIME COMMAND");
+XZ	tputs(UE, 1, ttcom);
+XZ}
+XZ
+XZLOCAL void
+XZshow_procs(np, max)
+XZint	np;
+XZint	max;
+XZ{
+XZ	int	i;
+XZ
+XZ#if 0
+XZ	printf(" nproc=%d witharg=%d hz = %d\n", nproc, np, hz);
+XZ#endif
+XZ	qsort((char *)procidx, np, sizeof(int), sortcmp);
+XZ	for(i = 0; i < np; i++)
+XZ	{
+XZ		register struct proc	*p = &proctab[procidx[i]];
+XZ		register struct udata_s	*a = &userdata[procidx[i]];
+XZ		
+XZ		printf("%5d ",	p->p_pid);
+XZ		if(a->o_uname != NULL)
+XZ			printf("%-7s", a->o_uname);
+XZ		else
+XZ			printf("%7d", p->p_uid);
+XZ		printf("%5d",	p->p_pri);
+XZ		printf("%4d",	p->p_nice);
+XZ		printf("%6d", 	a->o_tsize);
+XZ		printf("%6d", 	p->p_dsize);
+XZ		printf("%6d", 	p->p_ssize);
+XZ		printf(" %c",   (p->p_stat>6)? '?' : states[p->p_stat]);
+XZ		printf("%c", 	(p->p_flag & SLOAD)? ' ':'s');
+XZ
+XZ#if 1
+XZ		printf("%8.2f ", a->o_ttime/fhz);
+XZ		printf("%7.2f ", a->o_dtime/fhz);
+XZ#else
+XZ		printf("%8ld ", a->o_ttime);
+XZ		printf("%7ld ", a->o_dtime);
+XZ#endif
+XZ#if 0
+XZ		printf(" %2d %2d %2d ", a->o_nswap, a->o_nvcsw, a->o_nicsw);
+XZ		printf(" %4d %1d ", a->o_LastPid, a->o_LastStat);
+XZ#endif
+XZ		if((a->o_comm[0] == 0)&&(p->p_pid == 0))
+XZ			printf("%-19s",    "swapper");
+XZ		else
+XZ			printf("%-19s",    a->o_comm);
+XZ#if 1
+XZ		if(i >= (max-1))
+XZ			break;
+XZ#endif
+XZ		printf("%s", NewLine);
+XZ	}
+XZ}
+XZ/*
+XZ * Wait for a key press on stdin, signal  or until tout microseconds
+XZ * have elapsed
+XZ * returns the key value, -1 on error, or zero if timeout occured
+XZ */
+XZLOCAL int keypress(usec)
+XZlong usec;
+XZ{
+XZ	struct timeval	tv;
+XZ	fd_set		rfds;
+XZ
+XZ	if(done)
+XZ		return('q');	/* signal */
+XZ
+XZ	tv.tv_sec	= usec / 1000000;
+XZ	tv.tv_usec	= usec % 1000000; 
+XZ	FD_ZERO(&rfds);
+XZ	FD_SET(0, &rfds);
+XZ
+XZ	if(select(1, &rfds, NULL, NULL, &tv) > 0)
+XZ	{
+XZ		char c;
+XZ		if(read(0, &c, 1) != 1)
+XZ			return(-1);
+XZ		if((c == tc.t_intrc)||(c == tc.t_quitc))
+XZ			c = 'q';
+XZ		return(c);
+XZ	}
+XZ	return(0);
+XZ}
+XZ/*
+XZ * Convert and return a ms value formatted s[.d[d[d]]]
+XZ * returns delay on success
+XZ *        -1 on invalid delay spec
+XZ */
+XZLOCAL long GetDelay(ds)
+XZchar *ds;
+XZ{
+XZ	char *p;
+XZ	char *dp = NULL;
+XZ	long delay = 0;
+XZ
+XZ	/*check valid syntax delay spec */
+XZ	for(p = ds; *p; p++)
+XZ	{
+XZ		if(*p == '.')
+XZ		{
+XZ			if(dp != NULL)
+XZ				return(-1);
+XZ			dp = p;
+XZ			continue;
+XZ		}
+XZ		if(!isdigit(*p))
+XZ			return(-1);
+XZ	}
+XZ	/* do conversion */
+XZ	if(dp != NULL)	/* subseconds specified */
+XZ	{
+XZ		int	dd;	/* decimal digits */
+XZ
+XZ		*dp++ = 0;
+XZ		dd = p - dp;
+XZ
+XZ		if((dd > 3)||(dd < 1))
+XZ			return(-1);
+XZ		delay = atoi(dp);
+XZ		if(dd == 1)
+XZ			delay *= 100;
+XZ		else if(dd == 2)
+XZ			delay *= 10;
+XZ		delay *= 1000;
+XZ	}
+XZ	delay += atol(ds)*1000000;
+XZ	return(delay);
+XZ}
+XZ
+XZLOCAL char *ReadLine()
+XZ{
+XZ	char		c;
+XZ	static char	lbuff[50];
+XZ	char		*lp = lbuff;
+XZ
+XZ	while(read(0, &c, 1) == 1)
+XZ	{
+XZ		if(c == '\n')
+XZ		{
+XZ			*lp = 0;
+XZ			return(lbuff);
+XZ		}
+XZ		if(c == 0x7f)
+XZ		{
+XZ			if(lp == &lbuff[0])
+XZ				continue;
+XZ			--lp;
+XZ			write(1, "\b \b", 3);
+XZ			continue;
+XZ		}
+XZ#if 1
+XZ		write(1, &c, 1);
+XZ#else
+XZ		printf("%02x", c);
+XZ		fflush(stdout);
+XZ#endif
+XZ		*lp++ = c;
+XZ		if(lp == &lbuff[sizeof(lbuff)-2])
+XZ			return(NULL);
+XZ	}
+XZ	return(NULL);
+XZ}
+XZ
+XZ/*
+XZ ********************* Main Program *******************
+XZ */
+XZ
+XZ#define STATLINES (5)
+XZ
+XZLOCAL int
+XZdo_top()
+XZ{
+XZ	int			nread;
+XZ	int			npr;
+XZ
+XZ	/*
+XZ	 * Open files required for obtaining system information:
+XZ	 * /dev/kmem - kernel symbols and proc array
+XZ	 * /dev/mem  - incore process user struct and stack
+XZ	 * /dev/swap - swapped process user struct and stack
+XZ	 */
+XZ	if((kmem = open(kmemf, 0)) < 0)
+XZ	{
+XZ		perror(kmemf);
+XZ		return(1);
+XZ	}
+XZ	if((mem = open(memf, 0)) < 0)
+XZ	{
+XZ		perror(memf);
+XZ		return(1);
+XZ	}
+XZ	if((swap = open(swapf, 0)) < 0)
+XZ	{
+XZ		perror(swapf);
+XZ		return(1);
+XZ	}
+XZ
+XZ        if(getksyms("/unix") < 0)
+XZ	{
+XZ		fprintf(stderr, "Can't read kernel symbols - aborting\n");
+XZ		return(1);
+XZ	}
+XZ
+XZ	/* find number of procs */
+XZ
+XZ	if(nproc_sym == 0)
+XZ	{
+XZ		fputs("nproc not in namelist\n",stderr);
+XZ		return(-1);
+XZ	}
+XZ
+XZ	if(readat(kmem, (off_t) nproc_sym, (char *)&nproc,sizeof(nproc)) <0)
+XZ	{
+XZ		perror(kmemf);
+XZ		return(-1);
+XZ	}
+XZ	/* find value of hz */
+XZ	if(readat(kmem, (off_t) hz_sym, (char *)&hz,sizeof(hz)) < 0)
+XZ	{
+XZ		perror(kmemf);
+XZ		return(-1);
+XZ	}
+XZ	fhz = hz * 1.0;
+XZ	memset(untab, 0, sizeof(untab));
+XZ	/*
+XZ	 * allocate an array to hold processess information
+XZ	 */
+XZ	ptsz = nproc * sizeof(struct proc);
+XZ
+XZ	if((proctab = (struct proc *)malloc(ptsz))==NULL)
+XZ	{
+XZ		fputs("top: not enough memory for proc table\n",stderr);
+XZ		exit(1);
+XZ	}
+XZ	/*
+XZ	 * allocate an array to user struct information
+XZ	 */
+XZ	if((userdata=(struct udata_s *)calloc(nproc, sizeof(struct udata_s)))==NULL)
+XZ	{
+XZ		fprintf(stdout, "top: can't allocate %d bytes for saving info\n", nproc*sizeof(struct udata_s));
+XZ		exit(1);
+XZ	}
+XZ	/*
+XZ	 * allocate an indirection table for efficient sorting
+XZ	 */
+XZ	if( (procidx = (int *) malloc(nproc*sizeof(short))) == NULL)
+XZ	{
+XZ		fputs("top: cant allocate index table\n", stderr);
+XZ		return(1);
+XZ	}
+XZ	if((npr = update()) < 0)
+XZ		return(1);
+XZ	tputs(CLEARSCR, 1, ttcom);
+XZ 	dial(STATLINES, 0);
+XZ	show_titles();
+XZ	if((ut = fopen(_PATH_UTMP, "r")) == NULL)
+XZ	{
+XZ		perror(_PATH_UTMP);
+XZ		return(1);
+XZ	}
+XZ
+XZ	while(1)
+XZ	{
+XZ		char c = keypress(upd_us);
+XZ
+XZ		if(c != 0)
+XZ		{
+XZ			if(c == 'q')
+XZ				return(0);
+XZ			if(c == 's')
+XZ			{
+XZ				char	*s;
+XZ
+XZ				dial(STATLINES-1,0);
+XZ				fprintf(stdout, "Change delay from %4.3f to ",
+XZ					(upd_us *1.0)/1000000);
+XZ				fflush(stdout);
+XZ				s = ReadLine();
+XZ				dial(STATLINES-1,0);
+XZ				fprintf(stdout, "%40s", "");
+XZ				fflush(stdout);
+XZ				if(s != NULL)
+XZ				{
+XZ					long newdelay;
+XZ
+XZ					if((newdelay = GetDelay(s)) > 0)
+XZ					{
+XZ						upd_us = newdelay;
+XZ						dial(lines-1, 0);
+XZ						fflush(stdout);
+XZ						continue;
+XZ					}
+XZ					if(*s == 0)
+XZ						continue;
+XZ				}
+XZ				dial(STATLINES-1,0);
+XZ				fprintf(stdout, "Unacceptable delay: %s", s);
+XZ				fflush(stdout);
+XZ				sleep(1);
+XZ				dial(STATLINES-1,0);
+XZ				fprintf(stdout, "%40s", "");
+XZ				dial(lines-1, 0);
+XZ				fflush(stdout);
+XZ				continue;
+XZ			}
+XZ#if !BADKEY_IGNORE
+XZ
+XZ			dial(lines-1,0);
+XZ			fprintf(stdout, "\nUnexpected command: '%c'", c);
+XZ			return(0);
+XZ/* otherwise invalid key commands just force an update */
+XZ#endif
+XZ		}
+XZ		if((npr = update()) < 0)
+XZ			return(1);
+XZ		dial(0,0);
+XZ		show_stats(npr);
+XZ		dial(STATLINES+1,0);
+XZ		show_procs(npr, lines-(STATLINES+1));
+XZ		fflush(stdout);
+XZ	}
+XZ}
+XZ
+XZ#if !TTY_RAW
+XZLOCAL int sighand(sig, code, scp)
+XZint			sig, code;
+XZstruct sigcontext	*scp;
+XZ{
+XZ	done = 1;
+XZ}
+XZ#endif /* TTY_RAW */
+XZ
+XZLOCAL void usage(p)
+XZchar *p;
+XZ{
+XZ	fprintf(stderr, "Usage: %s [opts]\n", p);
+XZ	fprintf(stderr, "Where options are\n");
+XZ	fprintf(stderr, "\t-h         show this summary\n");
+XZ	fprintf(stderr, "\t-s<delay>  delay in seconds between updates\n");
+XZ}
+XZ
+XZEXPORT int main(int argc, char *argv[])
+XZ{
+XZ	int 	status = 0;
+XZ	char	ch;
+XZ
+XZ	while((ch = getopt(argc, argv, "hs:")) != EOF)
+XZ	{
+XZ		switch(ch)
+XZ		{
+XZ			case 's':
+XZ				if((upd_us = GetDelay(optarg)) <= 0)
+XZ				{
+XZ					fprintf(stderr, "Invalid delay\n");
+XZ					exit(1);
+XZ				}
+XZ				break;		
+XZ			default:
+XZ			case 'h':
+XZ				usage(argv[0]);
+XZ				exit(1);
+XZ		}
+XZ		argc -= optind;
+XZ		argv += optind;
+XZ	}
+XZ
+XZ	if(tcinit() < 0)
+XZ		return(1);
+XZ#if !TTY_RAW
+XZ	if(
+XZ		(signal(SIGHUP, sighand) == -1)
+XZ		||
+XZ		(signal(SIGINT, sighand) == -1)
+XZ	  )
+XZ	{
+XZ		perror("signal");
+XZ		exit(1);
+XZ	}
+XZ#endif /* TTY_RAW */
+XZ	if(config_tty(1, &lines, &columns) < 0)
+XZ		return(1);
+XZ
+XZ	if(do_top() != 0)
+XZ		status = 1;
+XZ
+XZ	config_tty(0, NULL, NULL);
+XZ	if(done)
+XZ		fprintf(stdout, "*interrupt*\n");
+XZ	return(status);
+XZ}
+XSHAR_EOF
+Xfi
+Xif test -f 'Makefile'
+Xthen
+X	echo shar: "will not over-write existing file 'Makefile'"
+Xelse
+Xsed 's/^Z//' << \SHAR_EOF > 'Makefile'
+XZ#
+XZ# @(#)Makefile  1.0 (2.11BSD) 2020/3/4
+XZ#
+XZ
+XZCFLAGS= -O
+XZSEPFLAG= -i
+XZMAN=	top.0
+XZMANSRC=	top.1
+XZ
+XZall: top ${MAN}
+XZ
+XZtop: top.o psdb.o
+XZ	cc -i -o top top.o psdb.o -ltermcap
+XZ
+XZtop.o: top.c psdb.h
+XZ	cc ${CFLAGS} -c top.c
+XZ
+XZpsdb.o: psdb.c psdb.h
+XZ	cc ${CFLAGS} -c psdb.c
+XZ
+XZtop.0: top.1
+XZ	/usr/man/manroff ${MANSRC} > ${MAN}
+XZ
+XZinstall:
+XZ	install -s -o root -g kmem -m 2755 top ${DESTDIR}/usr/ucb
+XZ	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat1
+XZ
+XZclean:
+XZ	rm -f top.o psdb.o top ${MAN}
+XSHAR_EOF
+Xfi
+Xif test -f 'psdb.h'
+Xthen
+X	echo shar: "will not over-write existing file 'psdb.h'"
+Xelse
+Xsed 's/^Z//' << \SHAR_EOF > 'psdb.h'
+XZ/* 
+XZ * Structure for the wchan table
+XZ */
+XZtypedef struct wc_s
+XZ{
+XZ        char		cname[8];
+XZ        unsigned        caddr;
+XZ} wc_t;
+XZ/*
+XZ * structure for the terminal table
+XZ *  store 14 chars of name as MAXNAMLEN uses too much memory
+XZ *  and device names tend to be short
+XZ */
+XZtypedef struct  ttab_s
+XZ{
+XZ        char    name[14];
+XZ        dev_t   ttyd;
+XZ} ttab_t;
+XZ
+XZextern u_int	proc_sym;
+XZextern u_int	nproc_sym;
+XZextern u_int	hz_sym;
+XZ
+XZextern int	hz;
+XZextern u_int	nproc;
+XZ
+XZextern int	nttys;
+XZextern int	nchans;
+XZextern wc_t 	*wclist;
+XZextern ttab_t	*ttlist;
+XZ
+XZint getksyms();
+XSHAR_EOF
+Xfi
+Xif test -f 'top.1'
+Xthen
+X	echo shar: "will not over-write existing file 'top.1'"
+Xelse
+Xsed 's/^Z//' << \SHAR_EOF > 'top.1'
+XZ.\" Copyright (c) 1980 Regents of the University of California.
+XZ.\" All rights reserved.  The Berkeley software License Agreement
+XZ.\" specifies the terms and conditions for redistribution.
+XZ.\"
+XZ.\"	@(#)top.1	6.2 (Berkeley) 6/8/85
+XZ.\"
+XZ.TH TOP 1 "March 4, 2020"
+XZ.UC 4
+XZ.SH NAME
+XZtop \- display system activity
+XZ.SH SYNOPSIS
+XZ.B top
+XZ[
+XZ.B \-h
+XZ] [
+XZ.B \-s delay
+XZ]
+XZ.SH DESCRIPTION
+XZThe
+XZ.B top
+XZprogram provides a dynamic real-time view of a running system. 
+XZIt displays system summary information as well as a list of the
+XZmost active processes currently being managed by the system. 
+XZIt is a trimmed down and less flexible version of the the program of
+XZthe same name commonly found on more recent Unix and Unix like
+XZoperating systems. The information provided closely resembles the
+XZdefault display of the program on larger, more recent systems.
+XZ.PP
+XZIf the 
+XZ.B \-s
+XZcommand line option is specified, its argument is the update delay
+XZin seconds followed by an optional decimal point and up to 3 digits, allowing
+XZmillisecond accurate delay specifications.
+XZThe default delay is one second. The
+XZ.B \-h
+XZcommand line option produces a usage summary.
+XZ.PP
+XZ.I Summary Display
+XZ.PP
+XZThe first line of the summary includes the name of the program, the
+XZtime of day, the system up time, the number of currently logged in
+XZusers, and the system load average as returned by the getloadavg(3),
+XZwhich is the average number of processes in the system run queue
+XZcalculated over the last 1, 5 and 15 minutes. The system up time is
+XZobtained by subtracting the boot time returned by sysctl(3) from
+XZthe current time.
+XZ.PP
+XZThe second summary line displays the current total number of processes,
+XZplus the breakdown of this number into running, sleeping, stopped and
+XZzombie processes. The classification is based on p_stat value in each
+XZprocesses proctab entry as follows:
+XZ.TP
+XZ.B running
+XZSRUN, SIDL or 0
+XZ.TP
+XZ.B sleeping
+XZSSLEEP or SWAIT 
+XZ.TP
+XZ.B stop
+XZSSTOP
+XZ.TP
+XZ.B zombie
+XZSZOMB or any undefined state
+XZ.PP
+XZThe third line provides a memory usage summary. This displays the total
+XZphysical memory, the amount of free memory, and the amount of memory used
+XZin bytes. It also shows the amount of memory used as a percentage of total
+XZmemory. Memory is allocated in 64 byte units, so displaying memory amounts
+XZin KiB as in other versions of top would involve fractions and is
+XZunnecessary in a small system. There is also no need to distinguish free
+XZmemory from available memory, as there is no dynamic sizing of the buffer
+XZcache.
+XZ.PP
+XZThe last status line provides information about swap usage. It displays
+XZtotal, free and available space in bytes, as well as percentage used. 
+XZ.PP
+XZ.I Process Summary
+XZ.PP
+XZThe process summary includes a title line followed by information about
+XZthe most recently active processes, one per line, for as many lines that
+XZare left on the display (as reported by the TIOCSETP ioctl). 
+XZ.PP
+XZThe processes are displayed most active first, where activity is determined
+XZby the change in the sum u_utime+u_stime for a process between the most recent
+XZread of the process table and the previous read. Within groups of processes
+XZhavng the same value for this metric, the ordering is determined by the
+XZprocesses total u_utime+u_stime. The default delay between updates is
+XZone second. Two process table reads occur before the first display update
+XZto allow the above calculation to be performed.
+XZ.PP
+XZThe details displayed for each process include
+XZ.TP
+XZ.B PID
+XZThe process ID
+XZ.TP
+XZ.B USER
+XZName of the process owner
+XZ.TP
+XZ.B PR
+XZProcess priority
+XZ.TP
+XZ.B NI
+XZnice value.
+XZ.TP
+XZ.B TEXT
+XZsize of process text area
+XZ.TP
+XZ.B DATA
+XZsizeof process initialized data
+XZ.TP
+XZ.B STACK
+XZprocess stack space size
+XZ.TP
+XZ.B S
+XZProcess state (S=sleep, W=wait, R=run, I=idle, Z=zombie, T=stop)
+XZ.TP
+XZ.B TIME
+XZTotal user plus system time used by the process (u_utime+u_stime)
+XZ.TP
+XZ.B DTIME
+XZChange in TIME value since last update
+XZ.TP
+XZ.B COMMAND
+XZThe process name
+XZ.PP
+XZ.I User Commands
+XZ.PP
+XZThe display updates indefinately until a command in the form of a
+XZkey press is received, or a signal is received.
+XZKeys are not echoed and are acted on immediately without the
+XZneed for a carriage return. The only command currently implemented is
+XZthe
+XZ.B q
+XZcommand, which terminates the program. Any unrecognized command will
+XZresult in termination with a warning message.
+XZ.P
+XZ.SH EXAMPLE
+XZAnd example of typical output is
+XZ.nf
+XZtop - 17:33:34 up  1 day,  1:17,   3 users,  load average: 0.37, 0.23, 0.01
+XZTasks:  27 total,   1 running,   26 sleeping,   0 stopped,   0 zombie
+XZ    Mem :  3932160 total,  1939200 free,  1992960 used (50%)
+XZ    Swap:    16719 total,    14706 free,     2013 used (12%)
+XZ
+XZ  PID USER      PR  NI  TEXT  DATA STACK S     TIME   DTIME COMMAND
+XZ  644 root      50   0   411   608    90 R     4.52    0.02 top 
+XZ    1 root      30   0   250   160    72 S    85.63    0.00 init
+XZ  483 digbyt    40   0   760   640   102 S    72.77    0.00 tcsh
+XZ  470 digbyt    28   0   760   624   102 S    59.77    0.00 tcsh
+XZ   59 root      26   0   576   272    72 S    23.20    0.00 cron 
+XZ  482 root      26   0   372   192    76 S    20.70    0.00 telnetd
+XZ  568 digbyt    28   0   760   560   102 S    15.83    0.00 tcsh
+XZ  469 root      26   0   372   192    76 S     2.95    0.00 telnetd
+XZ    0 root       0   0     0     0     0 S     1.95    0.00 swapper
+XZ   71 root      26   0   408   224    22 S     0.50    0.00 inetd
+XZ   46 root      26   0   347   240   155 S     0.47    0.00 syslogd
+XZ  567 root      26   0   372   192    76 S     0.32    0.00 telnetd
+XZ   79 root      26   0   770   272    42 S     0.22    0.00 lpd
+XZ   95 root      26   0   879   432    71 S     0.22    0.00 sendmail
+XZ   56 root      40   0    24     3    22 S     0.15    0.00 update
+XZ   63 root      26  -1   243   128    43 S     0.12    0.00 acctd
+XZ   75 root      26   0   238   112    42 S     0.03    0.00 rwhod
+XZ  109 root      28   0   247   127    21 S     0.03    0.00 getty
+XZ.fi
+XZ.SH AUTHOR
+XZDigby Tarvin
+XZ.SH FILES
+XZ.nf
+XZ/var/run/psdatabase    kernel symbols cache built and used by ps(1)
+XZ.fi
+XZ.SH "SEE ALSO"
+XZps(1)
+XSHAR_EOF
+Xfi
+Xif test -f 'psdb.c'
+Xthen
+X	echo shar: "will not over-write existing file 'psdb.c'"
+Xelse
+Xsed 's/^Z//' << \SHAR_EOF > 'psdb.c'
+XZ/*
+XZ * Load the process status cache saved for the 'ps' program at boot
+XZ * 
+XZ * The ps data cache contains:
+XZ *  
+XZ * KernelName	MAXPATHLEN+1	Name of cached Kernel
+XZ * nllen	int		namelist structure count
+XZ * nttys	int		ttys structure count
+XZ * nchans	int		wchan structure count
+XZ * nl		nllen*struct	proc,npoc and hz namelist entries
+XZ * ttlist	nttys*struct	terminal information
+XZ * wclist	nchans*struct	wait channel information
+XZ *
+XZ */
+XZ#include <stdio.h>	/* fopen/fread.. */
+XZ#include <a.out.h>	/* struct nlist */
+XZ#include <sys/file.h>	/* lseek */
+XZ#include <sys/param.h>	/* MAXPATHLEN */
+XZ#include "psdb.h"
+XZ
+XZ#define LOCAL 	static
+XZ#define EXPORT	/**/
+XZ
+XZ#define MAXTTYS         160     /* 128 plus a few extra */
+XZ
+XZ#define X_PROC          0
+XZ#define X_NPROC         1
+XZ#define X_HZ            2
+XZ
+XZLOCAL char		*psdbf	= "/var/run/psdatabase";
+XZLOCAL struct nlist	nl[4];
+XZ/*
+XZ * Returned information
+XZ */
+XZEXPORT u_int		proc_sym	= 0;
+XZEXPORT u_int		hz_sym		= 0;
+XZEXPORT u_int		nproc_sym	= 0;
+XZ
+XZEXPORT int		nttys		= 0;
+XZEXPORT ttab_t		*ttlist		= NULL;
+XZ
+XZEXPORT int		nchans		= 0;
+XZEXPORT wc_t 		*wclist		= NULL;
+XZ
+XZvoid *calloc();
+XZ
+XZLOCAL char *readpsdb()
+XZ{
+XZ	static	char	unamebuf[MAXPATHLEN+1];
+XZ	char		*p = unamebuf;
+XZ	register FILE	*fp;
+XZ	int		nllen;
+XZ
+XZ	if((fp = fopen(psdbf, "r")) == NULL)
+XZ	{
+XZ		perror(psdbf);
+XZ		return(NULL);
+XZ	}
+XZ
+XZ	while ((*p= getc(fp)) != '\0')
+XZ		p++;
+XZ
+XZ	if(
+XZ	    (fread((char *)&nllen,	sizeof nllen, 1, fp) != 1)
+XZ	    ||
+XZ	    (fread((char *)&nttys,	sizeof nttys, 1, fp) != 1)
+XZ	    ||
+XZ	    (fread((char *)&nchans,	sizeof nchans, 1, fp) != 1)
+XZ	    ||
+XZ	    (fread((char *)nl,	sizeof(struct nlist), nllen, fp) != nllen)
+XZ	   )
+XZ	{
+XZ		perror(psdbf);
+XZ		return(NULL);
+XZ	}
+XZ
+XZ	if((ttlist = (ttab_t *) calloc((unsigned)nttys, sizeof(ttab_t))) == NULL)
+XZ	{
+XZ		fputs("Too many tty names\n",stderr);
+XZ		return(NULL);
+XZ	}
+XZ	if(fread((char *)ttlist,	sizeof(ttab_t), nttys, fp) != nttys)
+XZ	{
+XZ		perror(psdbf);
+XZ		return(NULL);
+XZ	}
+XZ
+XZ	if((wclist = (wc_t *)calloc((unsigned)nchans, sizeof(wc_t))) == NULL)
+XZ	{
+XZ		fputs("Too many wchan symbols\n",stderr);
+XZ		return(NULL);
+XZ	}
+XZ
+XZ	if(fread((char *) wclist, sizeof(wc_t), nchans, fp) != nchans)
+XZ	{
+XZ		perror(psdbf);
+XZ		return(NULL);
+XZ	}
+XZ	(void) fclose(fp);
+XZ	return(unamebuf);
+XZ}
+XZ
+XZEXPORT int getksyms(kname)
+XZchar	*kname;
+XZ{
+XZ	char		*uname;
+XZ
+XZ	if((uname = readpsdb()) == NULL)
+XZ		return(-1);
+XZ
+XZ	if(strcmp(uname,kname) != 0)
+XZ	{
+XZ		free((char *)wclist);
+XZ		nchans = 0;
+XZ		return(-1);
+XZ	}
+XZ
+XZ	proc_sym	= nl[X_PROC].n_value;
+XZ	nproc_sym	= nl[X_NPROC].n_value;
+XZ	hz_sym		= nl[X_HZ].n_value;
+XZ	return(0);
+XZ}
+XSHAR_EOF
+Xfi
+Xcd ..
+Xexit 0
+X#	End of shell archive
+SHAR_EOF
+fi
+exit 0
+#	End of shell archive

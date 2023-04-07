@@ -1,0 +1,872 @@
+Subject: unmaintained/obsolete/unnecessary file cleanup + new include file
+Index:	 src,src/sys/pdpstand,src/sys,src,,src/bin/tcsh
+
+Description:
+	There are files which are unnecessary because 1) they are obsolete 
+	due to being unmaintained copies, 2) wrong architecture (VAX driver
+	include files) or 3) the file does nothing and is never used by anything
+	in the system.
+
+Repeat-By:
+	Observation.
+
+	1) /usr/src/include is an obsolete/outdated copy of /usr/include.
+	   The last update in /usr/src/include was 23 years ago.  Many
+	   of the out of sync files in /usr/src/include are 30 years old - from
+	   when they were copied from 4BSD.
+
+	   Having the same file in multiple places in the system is a BAD thing!
+	   The end result is an out of sync/obsolete/unmaintained copy.
+
+	   If anyone ever did this:
+
+		   cd /usr/src/include
+		   make install
+
+	   they would seriously corrupt their system!
+
+	   Also in /usr/src/Makefile the use of the obsolete copy was commented
+	   out about 24 years ago!!
+
+	   For these reasons /usr/src/include is being removed from the system.
+
+	2) 2.11BSD has its own RX02 driver include file in pdpuba/rxreg.h and
+	   does not need the VAX version present in vaxuba/rxreg.h
+
+	3) The assembly editing sed scripts /usr/src/asm.sed and asm.sed.pdp
+	   are NO-OP files.  They are NOT used by anything in the system and
+	   the 'pdp' version does NOTHING because it substitutes a dummy string 
+	   with itself.
+
+	   The asm.sed.vax file is an example of a wrong architecture file 
+	   which is not needed and can not (and is not) used.
+
+	4) In the process of fixing a bug in tcsh's Makefile it was observed
+	   that the Makefile was approximately 50% "junk" consisting of
+	   commands for other architectures (tahoe, vax, mips) and operating 
+	   systems (hpux, irix, etc).  If any of those want to port tcsh 
+	   they're not going to start with the 2.11BSD source tree.  It was
+	   deemed to be time to clean up the Makefile.
+
+	5) In the uucp source tree it was noticed in aculib/ that there was
+	   a reference to <dk.h> which should have been <OLD/dk.h> because the
+	   header file had been relocated a very long time ago.  Let's fix
+	   the reference even if no known system has the Datakit connection ;)
+
+	6) "cd /usr/src; make tags" could see "Don't know how to make tags"
+	    errors.  Some Makefiles do not support the 'tags' target.  Those
+	    directories should not be listed in TAGSDIR lists.  Fix is to
+	    update a couple Makefiles.
+
+Fix:
+	As long as the 'include' file situation is being cleaned up and 
+	in anticipation of the next patch (#460) a new include file (stdarg.h)
+	is being installed into /usr/include. One less thing to do in
+	in #460 (which will be large) - the start of 2.11's ANSIfication.
+
+	There is both a new source file to be installed as well as a patch
+	file.  A 'shar' file is used as a container.
+
+	Cut where indicated and save to a tmp file such as /tmp/459,
+
+	Then:
+
+cd /tmp
+sh  459
+patch -p0 < 459.patch
+install -c -m 444 -o root -g wheel stdarg.h /usr/include
+
+	The following REMOVES files from the system.  If you have a
+	'sentimental attachment' to the files make backup copies ;)
+
+# remove the symlink
+rm /usr/include/vaxuba
+# remove the directory
+rm -r /usr/include/sys/vaxuba
+
+# remove the asm.sed files
+rm /usr/src/asm.sed*
+
+# remove the unmaintained/outdated copy of include files in the source tree
+rm -r /usr/src/include
+
+	Nothing is required to be recompiled as part of applying this patch.
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.update.uu.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+#! /bin/sh
+# This is a shell archive, meaning:
+# 1. Remove everything above the #! /bin/sh line.
+# 2. Save the resulting text in a file.
+# 3. Execute the file with /bin/sh (not csh) to create:
+#	459.patch
+#	stdarg.h
+# This archive created: Sat Jan  4 22:23:02 2020
+export PATH; PATH=/bin:/usr/bin:$PATH
+if test -f '459.patch'
+then
+	echo shar: "will not over-write existing file '459.patch'"
+else
+sed 's/^X//' << \SHAR_EOF > '459.patch'
+X*** ./usr/doc/2.10/setup.2.11/1.t.old	Fri Jan 24 20:08:32 1997
+X--- ./usr/doc/2.10/setup.2.11/1.t	Sat Jan  4 20:20:58 2020
+X***************
+X*** 2,8 ****
+X  .\" All rights reserved.  The Berkeley software License Agreement
+X  .\" specifies the terms and conditions for redistribution.
+X  .\"
+X! .\"	@(#)1.t	2.5 (GTE) 1997/1/24
+X  .\"
+X  .ds lq ``
+X  .ds rq ''
+X--- 2,8 ----
+X  .\" All rights reserved.  The Berkeley software License Agreement
+X  .\" specifies the terms and conditions for redistribution.
+X  .\"
+X! .\"	@(#)1.t	2.6 (2.11BSD) 2020/1/4
+X  .\"
+X  .ds lq ``
+X  .ds rq ''
+X***************
+X*** 162,170 ****
+X  followed by a full dump of a root file system (see \fIdump\fP\|(8)).
+X  Following the root file system dump is a tape archive image of \fB/usr\fP
+X  except for \fB/usr/src\fP (see \fItar\fP\|(1)).  Finally, a tape archive
+X! of source for include files and kernel source ends the first tape.  The
+X  second tape contains a tape archive image, also in \fItar\fP format, of
+X! all the remaining source that comes with the system.
+X  .PP
+X  The entire distribution (barely) fits on a single TK50 cartridge, references to
+X  the second tape should be treated as being the 9th file on the TK50.  Many of
+X--- 162,170 ----
+X  followed by a full dump of a root file system (see \fIdump\fP\|(8)).
+X  Following the root file system dump is a tape archive image of \fB/usr\fP
+X  except for \fB/usr/src\fP (see \fItar\fP\|(1)).  Finally, a tape archive
+X! of the kernel source ends the first tape.  The
+X  second tape contains a tape archive image, also in \fItar\fP format, of
+X! the remaining source that comes with the system.
+X  .PP
+X  The entire distribution (barely) fits on a single TK50 cartridge, references to
+X  the second tape should be treated as being the 9th file on the TK50.  Many of
+X***************
+X*** 187,193 ****
+X  4	1024	32	standalone \fBicheck\fP(8)
+X  5	10240	285	\fIdump\fP of ``root'' file system
+X  6	10240	3368	\fItar\fP dump of /usr, excepting /usr/src
+X! 7	10240	519	\fItar\fP dump of /usr/src/include and /usr/src/sys
+X  .TE
+X  
+X  TAPE 2:
+X--- 187,193 ----
+X  4	1024	32	standalone \fBicheck\fP(8)
+X  5	10240	285	\fIdump\fP of ``root'' file system
+X  6	10240	3368	\fItar\fP dump of /usr, excepting /usr/src
+X! 7	10240	519	\fItar\fP dump of /usr/src/sys
+X  .TE
+X  
+X  TAPE 2:
+X***************
+X*** 195,201 ****
+X  n n n l.
+X  Tape file	Record size	Records\(ua	Contents
+X  _
+X! 0	10240	4092	\fItar\fP dump of /usr/src, excepting include and sys
+X  .TE
+X  .DE
+X  .KE
+X--- 195,201 ----
+X  n n n l.
+X  Tape file	Record size	Records\(ua	Contents
+X  _
+X! 0	10240	4092	\fItar\fP dump of /usr/src excepting sys
+X  .TE
+X  .DE
+X  .KE
+X*** ./usr/doc/2.10/setup.2.11/2.t.old	Mon Aug 11 22:53:52 1997
+X--- ./usr/doc/2.10/setup.2.11/2.t	Sat Jan  4 12:35:16 2020
+X***************
+X*** 2,8 ****
+X  .\" All rights reserved.  The Berkeley software License Agreement
+X  .\" specifies the terms and conditions for redistribution.
+X  .\"
+X! .\"	@(#)2.t	1.10 (GTE) 1997/8/11
+X  .\"
+X  .ds lq ``
+X  .ds rq ''
+X--- 2,8 ----
+X  .\" All rights reserved.  The Berkeley software License Agreement
+X  .\" specifies the terms and conditions for redistribution.
+X  .\"
+X! .\"	@(#)2.t	1.11 (2.11BSD) 2020/1/4
+X  .\"
+X  .ds lq ``
+X  .ds rq ''
+X***************
+X*** 61,67 ****
+X  Build and restore the /usr file system from tape
+X  with \fItar\fP\|(1).
+X  .IP 7)
+X! Restore the include and kernel sources from tape.
+X  .IP 8)
+X  Extract the remaining source from the second tape.
+X  .IP 9)
+X--- 61,67 ----
+X  Build and restore the /usr file system from tape
+X  with \fItar\fP\|(1).
+X  .IP 7)
+X! Restore the kernel sources from tape.
+X  .IP 8)
+X  Extract the remaining source from the second tape.
+X  .IP 9)
+X***************
+X*** 535,541 ****
+X  .DE
+X  The data on the seventh tape file has now been extracted.
+X  All that remains on the first tape is a small archive containing
+X! source for the kernel and include files.
+X  .PP
+X  If you have an existing/old password file to be merged back into
+X  \*(2B, special steps are necessary to convert the old password file
+X--- 535,541 ----
+X  .DE
+X  The data on the seventh tape file has now been extracted.
+X  All that remains on the first tape is a small archive containing
+X! the kernel source files.
+X  .PP
+X  If you have an existing/old password file to be merged back into
+X  \*(2B, special steps are necessary to convert the old password file
+X***************
+X*** 547,553 ****
+X  \fB#\fP mt -f /dev/rmt12 fsf	(position tape at beginning of next tape file)
+X  \fB#\fP mkdir src	(make directory for source)
+X  \fB#\fP cd src	(make /usr/src the current directory)
+X! \fB#\fP tar xpbf 20 /dev/rmt12 	(extract the system and include source)
+X  (this takes about 5-10 minutes)
+X  \fB#\fP cd /	(back to root)
+X  \fB#\fP chmod 755  /  /usr  /usr/src /usr/src/sys
+X--- 547,553 ----
+X  \fB#\fP mt -f /dev/rmt12 fsf	(position tape at beginning of next tape file)
+X  \fB#\fP mkdir src	(make directory for source)
+X  \fB#\fP cd src	(make /usr/src the current directory)
+X! \fB#\fP tar xpbf 20 /dev/rmt12 	(extract the system source)
+X  (this takes about 5-10 minutes)
+X  \fB#\fP cd /	(back to root)
+X  \fB#\fP chmod 755  /  /usr  /usr/src /usr/src/sys
+X*** ./usr/src/sys/pdpstand/Makefile.old	Sun Dec  3 19:01:24 2000
+X--- ./usr/src/sys/pdpstand/Makefile	Sat Jan  4 12:37:43 2020
+X***************
+X*** 1,4 ****
+X! #	Makefile	(2.11BSD)	2.4	2000/11/13
+X  #
+X  #	The limitations on program size have been removed.  The addition
+X  #	of disklabel support pushed 'restor' over the limit.  Even with
+X--- 1,4 ----
+X! #	Makefile	(2.11BSD)	2.5	2020/1/4
+X  #
+X  #	The limitations on program size have been removed.  The addition
+X  #	of disklabel support pushed 'restor' over the limit.  Even with
+X***************
+X*** 13,18 ****
+X--- 13,20 ----
+X  #	It is still possible to hand craft a version of the utilities by leaving
+X  #	out all but the necessary drivers. 
+X  #
+X+ # 2020/1/4   - remove unmaintained copy of the system include files in src/ and
+X+ #              the unused sed scripts asm.sed*
+X  # 2000/11/13 - use libkern instead of libc because the libc routines use 
+X  #	       floating point which may not exist.
+X  # 1997/8/11  - add -O to maketape and makesimtape compile commands
+X***************
+X*** 72,80 ****
+X  		lib libdata libexec local man msgs new old preserve pub \
+X  		sbin share spool tmp ucb
+X  	cd ${ROOT}/usr/src; tar cfb /dev/nr${TAPE} 20 \
+X! 		sys include
+X  	cd ${ROOT}/usr/src; tar cfb /dev/r${TAPE} 20 \
+X! 		Makefile asm.sed asm.sed.pdp asm.sed.vax bin etc games \
+X  		lib libexec local man new old sbin share ucb usr.bin \
+X  		usr.lib usr.sbin
+X  
+X--- 74,82 ----
+X  		lib libdata libexec local man msgs new old preserve pub \
+X  		sbin share spool tmp ucb
+X  	cd ${ROOT}/usr/src; tar cfb /dev/nr${TAPE} 20 \
+X! 		sys
+X  	cd ${ROOT}/usr/src; tar cfb /dev/r${TAPE} 20 \
+X! 		Makefile bin etc games \
+X  		lib libexec local man new old sbin share ucb usr.bin \
+X  		usr.lib usr.sbin
+X  
+X***************
+X*** 86,92 ****
+X  		lib libdata libexec local man msgs new old preserve pub \
+X  		sbin share spool tmp ucb
+X  	cd ${ROOT}/usr/src; tar cfb /dev/nr${TAPE} 20 \
+X! 		sys include
+X  
+X  switch_tapes: FRC
+X  	@echo "Switch tapes.  Hit CR when second tape is mounted."
+X--- 88,94 ----
+X  		lib libdata libexec local man msgs new old preserve pub \
+X  		sbin share spool tmp ucb
+X  	cd ${ROOT}/usr/src; tar cfb /dev/nr${TAPE} 20 \
+X! 		sys
+X  
+X  switch_tapes: FRC
+X  	@echo "Switch tapes.  Hit CR when second tape is mounted."
+X***************
+X*** 96,102 ****
+X  
+X  tape2:
+X  	cd ${ROOT}/usr/src; tar cfb /dev/r${TAPE} 20 \
+X! 		Makefile asm.sed asm.sed.pdp asm.sed.vax bin etc games \
+X  		lib libexec local man new old sbin share ucb usr.bin \
+X  		usr.lib usr.sbin
+X  
+X--- 98,104 ----
+X  
+X  tape2:
+X  	cd ${ROOT}/usr/src; tar cfb /dev/r${TAPE} 20 \
+X! 		Makefile bin etc games \
+X  		lib libexec local man new old sbin share ucb usr.bin \
+X  		usr.lib usr.sbin
+X  
+X*** ./usr/src/bin/tcsh/Makefile.old	Sun Dec 28 01:16:48 1997
+X--- ./usr/src/bin/tcsh/Makefile	Wed Dec 18 20:52:43 2019
+X***************
+X*** 1,4 ****
+X! #	Makefile	4.3.2	1997/12/27
+X  #
+X  # C Shell with process control; VM/UNIX VAX Makefile
+X  # Bill Joy UC Berkeley; Jim Kulp IIASA, Austria
+X--- 1,4 ----
+X! #	Makefile	4.4	2019/12/17
+X  #
+X  # C Shell with process control; VM/UNIX VAX Makefile
+X  # Bill Joy UC Berkeley; Jim Kulp IIASA, Austria
+X***************
+X*** 11,104 ****
+X  BUILD=tcsh
+X  
+X  ################################################################
+X! ## CLAGS.  For various -D things, see config.h
+X  ################################################################
+X- #
+X  # These are the default suffixes from .c to .o and -c to get there
+X- # but to use the global optimizer on the mips boxes, see below
+X- #
+X  SUF=o
+X  CF=-c
+X  
+X  LFLAGS=-I.
+X- #LFLAGS=-Zn10000			# hpux lint
+X  
+X  SYSDEFINE=pdp11
+X  CFLAGS= -I. -O -D${SYSDEFINE}
+X- #CFLAGS= -I. -g
+X  
+X! #CFLAGS= -g -pg -I. -DPROF
+X! #CFLAGS= -O -pg -I. -DPROF
+X! 
+X! # gcc 1.37-
+X! #CFLAGS=-O -I. -finline-functions -fstrength-reduce 
+X! 
+X! # gcc 1.37+
+X! #CFLAGS=-O -I. -fcombine-regs -finline-functions -fstrength-reduce #-msoft-float
+X! 
+X! #CFLAGS= -O -I. -fvolatile
+X! 
+X! # for silicon graphics (and other mips compilers) -- use the
+X! # global optimizer! (-O3).
+X! #CFLAGS= -O3 -I. 
+X! #CF=-j
+X! #SUF=u
+X! #.SUFFIXES: .u 				## Ultrix needs that
+X! 
+X! # for at&t machines
+X! #CFLAGS= -O -Ksd -I.
+X! 
+X! # for convexen
+X! #CFLAGS= -I. -ext -tm c1
+X! 
+X! # Stardent Titan
+X! #CFLAGS = -I. -O -43
+X! 
+X! ################################################################
+X  ## LDLAGS.  Define something here if you need to
+X  ################################################################
+X  LDFLAGS=-i -X
+X  
+X  ################################################################
+X! ## LIBES.  Pick one, or roll your own.
+X  ################################################################
+X  LIBES= -ltermcap		## BSD style things
+X- #LIBES= -ltermcap -lcs		## Mach
+X- #LIBES= -lcurses		## Sys V3 w/o networking
+X- #LIBES= -lcurses -lnet		## Sys V3 with networking
+X- #LIBES= -lcurses -ldir		## Sys V2 w/o networking [needs directory lib]
+X- #LIBES= -lcurses -ldir -lnet	## Sys V2 with networking [needs directory lib]
+X- #LIBES= -lcurses -lbsd		## For Irix3.1 on SGI-IRIS4D
+X- #LIBES= -lcurses -lsun -lbsd -lc_s ## For Irix3.3 on SGI-IRIS4D (w/ yp)
+X- #LIBES= -lcurses -lbsd -lc_s	## For Irix3.3 on SGI-IRIS4D (wo/ yp)
+X- #LIBES= -lcurses -lbsd		## or for aix on an IBM 370 or rs6000 or ps2
+X- #LIBES= -lcurses -lcposix	## ISC 2.2 
+X- #LIBES= -lposix -ltermcap	## A/UX 2.0
+X- #LIBES= -ltermcap -lseq		## Sequent's Dynix
+X- #LIBES= -lcurses -lsocket	## Intel's hypercube
+X  
+X- # The difficult choice of a c-compiler...
+X- # First, you should try your own c-compiler. 
+X- # Gcc -traditional is also a safe choice. 
+X- # If you think that you have good include files try gcc -Wall...
+X- # If you want to take out -traditional, make sure that your sys/ioctl.h
+X- # is fixed correctly, otherwise you'll be stopped for tty input!
+X- #CC=	gcc -Wall 
+X  CC=	cc
+X- #CC=	occ
+X  ED=	-ed
+X  AS=	-as
+X  RM=	-rm
+X  CXREF=	/usr/ucb/cxref
+X- VGRIND=	csh /usr/ucb/vgrind
+X  CTAGS=	/usr/ucb/ctags
+X  XSTR= /usr/ucb/xstr
+X- #MKSTR=	/usr/ucb/mkstr
+X  MKSTR=	./mkprstr
+X- SCCS=	/usr/local/sccs
+X- PARALLEL=12				# Make the multi-max run fast.
+X- #P=&					# Use Sequent's parallel make
+X- P=
+X  DESTDIR=
+X  BINDIR=/bin
+X  CATSECT=0
+X--- 11,45 ----
+X  BUILD=tcsh
+X  
+X  ################################################################
+X! ## CFLAGS.  For various -D things, see config.h
+X  ################################################################
+X  # These are the default suffixes from .c to .o and -c to get there
+X  SUF=o
+X  CF=-c
+X  
+X  LFLAGS=-I.
+X  
+X  SYSDEFINE=pdp11
+X  CFLAGS= -I. -O -D${SYSDEFINE}
+X  
+X! ################################################################
+X  ## LDLAGS.  Define something here if you need to
+X  ################################################################
+X  LDFLAGS=-i -X
+X  
+X  ################################################################
+X! ## LIBES.  Edit as needed.
+X  ################################################################
+X  LIBES= -ltermcap		## BSD style things
+X  
+X  CC=	cc
+X  ED=	-ed
+X  AS=	-as
+X  RM=	-rm
+X  CXREF=	/usr/ucb/cxref
+X  CTAGS=	/usr/ucb/ctags
+X  XSTR= /usr/ucb/xstr
+X  MKSTR=	./mkprstr
+X  DESTDIR=
+X  BINDIR=/bin
+X  CATSECT=0
+X***************
+X*** 105,111 ****
+X  MANSECT=1
+X  DESTMAN=/usr/man/man${MANSECT}
+X  DESTCAT=/usr/man/cat${MANSECT}
+X- FTPAREA=/usr/spool/ftp
+X  
+X  ASSRCS=	sh.c sh.dir.c sh.dol.c sh.err.c sh.exec.c sh.char.c \
+X  	sh.exp.c sh.file.c sh.func.c sh.glob.c sh.hist.c sh.init.c \
+X--- 46,51 ----
+X***************
+X*** 148,178 ****
+X  DISTSRCS= ${PSSRCS} ${TWSRCS} ${EDSRCS} ${TCSRCS} ${AVSRCS}
+X  
+X  
+X  OBJS= ${SHOBJS} ${TWOBJS} ${EDOBJS} ${TCOBJS} ${ALLOC} ${ERROBJ} ${STRINGS}
+X! ################################################################
+X  ## ERROBJS.  File for mkstr error processing
+X  ################################################################
+X- #ERROBJ=jpnerror.o errlst.o
+X  ERROBJ=jpnerror.o
+X  STRINGDIR=/etc
+X  STRINGFILE=tcsh${VERSION}strgs
+X  STRINGS=strings.o
+X! #
+X! #all: ${BUILD}
+X! #
+X! #tcsh:$(P) ${OBJS} 
+X! #	rm -f tcsh core
+X! #	${CC} ${LDFLAGS} ${CFLAGS} ${OBJS} -o tcsh ${LIBES}
+X! #
+X! #tcsh.ps: tcsh.1
+X! #	rm -f tcsh.ps
+X! #	-ptroff -man tcsh.1 > tcsh.ps
+X! #
+X! #
+X! # STRINGS must be last, to keep in sync with mkstr and xstr ouput 
+X! #OBJS= ${SHOBJS} ${TWOBJS} ${EDOBJS} ${ALLOC} ${PRINT} ${DIROBJS} \
+X! #	${ERROBJ} ${STRINGS}
+X! #ALLOC=tc.alloc.o 
+X  ALLOC=tc.alloc.o alloc11.o
+X  
+X  all: mkprstr tcsh tcsh.${CATSECT}
+X--- 88,104 ----
+X  DISTSRCS= ${PSSRCS} ${TWSRCS} ${EDSRCS} ${TCSRCS} ${AVSRCS}
+X  
+X  
+X+ # STRINGS must be last, to keep in sync with mkstr and xstr ouput 
+X  OBJS= ${SHOBJS} ${TWOBJS} ${EDOBJS} ${TCOBJS} ${ALLOC} ${ERROBJ} ${STRINGS}
+X! 
+X! ################################################################
+X  ## ERROBJS.  File for mkstr error processing
+X  ################################################################
+X  ERROBJ=jpnerror.o
+X  STRINGDIR=/etc
+X  STRINGFILE=tcsh${VERSION}strgs
+X  STRINGS=strings.o
+X! 
+X  ALLOC=tc.alloc.o alloc11.o
+X  
+X  all: mkprstr tcsh tcsh.${CATSECT}
+X***************
+X*** 251,266 ****
+X  	-Y -ltermcap -lc
+X  	@-size $@
+X  
+X- #.c.${SUF}:
+X- #	${CC} ${CF} ${CFLAGS} $<
+X- 
+X- #.c.${SUF}:
+X- #	${MKSTR} - ${STRINGFILE} x $*.c
+X- #	mv -f x$*.c x.c
+X- #	${CC} ${CFLAGS} ${CF} x.c 
+X- #	mv x.o $*.o
+X- #	rm -f x.c
+X- 
+X  .c.${SUF}: ${MKSTR}
+X  	${MKSTR} - ${STRINGFILE} x $*.c
+X  	${CC} -E ${CFLAGS} x$*.c | ${XSTR} ${CF} -
+X--- 177,182 ----
+X***************
+X*** 269,282 ****
+X  	mv x.o $*.o
+X  	rm -f x.c
+X  
+X- # Don't do any special massaging of C files for sharing of strings!!
+X- # it causes weird segmentation faults on some systems.
+X- #.c.o:
+X- #	${CC} -E ${CFLAGS} $*.c | ${XSTR} ${CF} -
+X- #	${CC} ${CF} ${CFLAGS} x.c 
+X- #	mv -f x.o $*.o
+X- #	rm -f x.c
+X- 
+X  strings.o: strings
+X  	${XSTR}
+X  	${CC} ${CF} xs.c
+X--- 185,190 ----
+X***************
+X*** 289,300 ****
+X  	mv -f x.o $*.o
+X  	rm -f x.c
+X  
+X- ##.DEFAULT:
+X- ##	${SCCS} get $<
+X- 
+X- ##.DEFAULT:
+X- ##	co $<
+X- 
+X  ed.defns.h: ed.defns.c
+X  	@rm -f $@
+X  	@echo '/* Do not edit this file, make creates it. */' > $@
+X--- 197,202 ----
+X***************
+X*** 337,358 ****
+X  	@ls -l | pr 
+X  	@pr sh*.h [a-rt-z]*.h sh*.c alloc.c
+X  
+X! vprint:
+X! 	@pr -l84 READ_ME TODO
+X! 	@pr -l84 makefile makefile.*
+X! 	@(size -l a.out; size *.${SUF}) | pr -l84 -h SIZES
+X! 	@${CXREF} sh*.c | pr -l84 -h XREF
+X! 	@ls -l | pr -l84
+X! 	@${CXREF} sh*.c | pr -l84 -h XREF
+X! 	@pr -l84 sh*.h [a-rt-z]*.h sh*.c alloc.c
+X! 
+X! vgrind:
+X! 	@cp /dev/null index
+X! 	@for i in *.h; do vgrind -t -h "C Shell" $$i >/crp/bill/csh/$$i.t; done
+X! 	@for i in *.c; do vgrind -t -h "C Shell" $$i >/crp/bill/csh/$$i.t; done
+X! 	@vgrind -t -x -h Index index >/crp/bill/csh/index.t
+X! 
+X! install: tcsh  tcsh.${CATSECT}
+X  	-mv -f ${DESTDIR}${BINDIR}/tcsh  ${DESTDIR}${BINDIR}/tcsh.old
+X  	install -s -m 555 -o bin -g bin tcsh ${DESTDIR}${BINDIR}/tcsh
+X  	install -c -m 444 -o bin -g bin  ${STRINGFILE} ${DESTDIR}${STRINGDIR}
+X--- 239,246 ----
+X  	@ls -l | pr 
+X  	@pr sh*.h [a-rt-z]*.h sh*.c alloc.c
+X  
+X! # tcsh  tcsh.${CATSECT}
+X! install: all
+X  	-mv -f ${DESTDIR}${BINDIR}/tcsh  ${DESTDIR}${BINDIR}/tcsh.old
+X  	install -s -m 555 -o bin -g bin tcsh ${DESTDIR}${BINDIR}/tcsh
+X  	install -c -m 444 -o bin -g bin  ${STRINGFILE} ${DESTDIR}${STRINGDIR}
+X***************
+X*** 372,428 ****
+X  tags:	/tmp
+X  	${CTAGS} sh*.c
+X  
+X- tar:
+X- 	rm -f tcsh.tar.Z
+X- 	rm -rf tcsh-${VERSION} 
+X- 	mkdir tcsh-${VERSION} tcsh-${VERSION}/config
+X- 	cp ${ALLSRCS} tcsh-${VERSION}
+X- 	cp ${CONFSRCS} tcsh-${VERSION}/config
+X- 	tar cvf - tcsh-${VERSION} | compress > tcsh-${VERSION}.tar.Z
+X- 	rm -rf tcsh-${VERSION}
+X- 
+X- tcsh-${VERSION}.tar.Z:
+X- 	rm -rf tcsh-${VERSION} 
+X- 	rm -f tcsh-${VERSION}.tar tcsh-${VERSION}.tar.Z DIFFS.[123]
+X- 	mkdir tcsh-${VERSION}
+X- 	./MAKEDIFFS bsd
+X- 	mv DIFFS.1 DIFFS.2 DIFFS.3 tcsh-${VERSION}
+X- 	cp ${DISTSRCS} tcsh-${VERSION}
+X- 	mkdir tcsh-${VERSION}/config
+X- 	cp ${CONFSRCS} tcsh-${VERSION}/config
+X- 	cp Makefile tcsh-${VERSION}/Makefile.new
+X- 	tar cvf - tcsh-${VERSION} | compress > tcsh-${VERSION}.tar.Z
+X- 	rm -rf tcsh-${VERSION}
+X- 
+X- tcsh.tahoe-${VERSION}.tar.Z:
+X- 	rm -rf tcsh.tahoe-${VERSION} 
+X- 	rm -f tcsh.tahoe-${VERSION}.tar tcsh.tahoe-${VERSION}.tar.Z DIFFS.[123]
+X- 	mkdir tcsh.tahoe-${VERSION}
+X- 	./MAKEDIFFS tahoe
+X- 	mv DIFFS.1 DIFFS.2 DIFFS.3 tcsh.tahoe-${VERSION}
+X- 	cp ${DISTSRCS} tcsh.tahoe-${VERSION}
+X- 	mkdir tcsh.tahoe-${VERSION}/config
+X- 	cp ${CONFSRCS} tcsh.tahoe-${VERSION}/config
+X- 	cp Makefile tcsh.tahoe-${VERSION}/Makefile.new
+X- 	tar cvf - tcsh.tahoe-${VERSION} | compress > tcsh.tahoe-${VERSION}.tar.Z
+X- 	rm -rf tcsh.tahoe-${VERSION}
+X- 
+X- tcsh.reno-${VERSION}.tar.Z:
+X- 	rm -rf tcsh.reno-${VERSION} 
+X- 	rm -f tcsh.reno-${VERSION}.tar tcsh.reno-${VERSION}.tar.Z DIFFS.[123]
+X- 	mkdir tcsh.reno-${VERSION}
+X- 	./MAKEDIFFS reno
+X- 	mv DIFFS.1 DIFFS.2 DIFFS.3 tcsh.reno-${VERSION}
+X- 	cp ${DISTSRCS} tcsh.reno-${VERSION}
+X- 	mkdir tcsh.reno-${VERSION}/config
+X- 	cp ${CONFSRCS} tcsh.reno-${VERSION}/config
+X- 	cp Makefile tcsh.reno-${VERSION}/Makefile.new
+X- 	tar cvf - tcsh.reno-${VERSION} | compress > tcsh.reno-${VERSION}.tar.Z
+X- 	rm -rf tcsh.reno-${VERSION}
+X- 
+X- ftp: tcsh-${VERSION}.tar.Z tcsh.tahoe-${VERSION}.tar.Z
+X- 	cp tcsh-${VERSION}.tar.Z tcsh.tahoe-${VERSION}.tar.Z ${FTPAREA}
+X- 	cp tcsh.man ${FTPAREA}
+X  
+X  #
+X  # Dependencies
+X--- 260,265 ----
+X*** ./usr/src/lib/libc/pdp/sys/Makefile.old	Fri Apr 21 22:25:10 2000
+X--- ./usr/src/lib/libc/pdp/sys/Makefile	Sat Jan  4 21:40:01 2020
+X***************
+X*** 1,6 ****
+X  # Placed in the public domain - 1995/05/06
+X  #
+X! #	@(#)Makefile	1.9 (2.11BSD) 2000/2/28
+X  
+X  CPP= /lib/cpp
+X  LD= /bin/ld
+X--- 1,6 ----
+X  # Placed in the public domain - 1995/05/06
+X  #
+X! #	@(#)Makefile	1.9.1 (2.11BSD) 2020/1/4
+X  
+X  CPP= /lib/cpp
+X  LD= /bin/ld
+X***************
+X*** 54,60 ****
+X  
+X  OBJS= ${PDPOBJS} ${NORM1} ${NORM2} ${LONG} ${ERROR} ${NOERROR}
+X  
+X! TAGSFILE=tags
+X  
+X  .s.o:
+X  	/lib/cpp -DPROF ${DEFS} $< | sed -e 's;^#;/;' | as -V -o $@
+X--- 54,60 ----
+X  
+X  OBJS= ${PDPOBJS} ${NORM1} ${NORM2} ${LONG} ${ERROR} ${NOERROR}
+X  
+X! tags:
+X  
+X  .s.o:
+X  	/lib/cpp -DPROF ${DEFS} $< | sed -e 's;^#;/;' | as -V -o $@
+X*** ./usr/src/usr.bin/uucp/aculib/dk.c.old	Mon Feb 16 18:21:35 1987
+X--- ./usr/src/usr.bin/uucp/aculib/dk.c	Thu Dec 26 12:40:37 2019
+X***************
+X*** 1,10 ****
+X  #ifndef lint
+X! static char sccsid[] = "@(#)dk.c	4.1 (Berkeley) 1/22/85";
+X  #endif
+X  
+X  #include "../condevs.h"
+X  #ifdef DATAKIT
+X! #include <dk.h>
+X  #define DKTRIES 2
+X  /***
+X   *	dkopn(flds)	make datakit connection
+X--- 1,10 ----
+X  #ifndef lint
+X! static char sccsid[] = "@(#)dk.c	4.2 (2.11BSD) 2019/12/26";
+X  #endif
+X  
+X  #include "../condevs.h"
+X  #ifdef DATAKIT
+X! #include <OLD/dk.h>
+X  #define DKTRIES 2
+X  /***
+X   *	dkopn(flds)	make datakit connection
+X*** ./usr/src/usr.lib/Makefile.old	Fri Dec 13 22:09:03 1996
+X--- ./usr/src/usr.lib/Makefile	Sat Jan  4 22:13:50 2020
+X***************
+X*** 3,9 ****
+X  # All rights reserved.  The Berkeley software License Agreement
+X  # specifies the terms and conditions for redistribution.
+X  #
+X! #	@(#)Makefile	5.12.3 (2.11BSD GTE) 1996/12/13
+X  #
+X  DESTDIR=
+X  CFLAGS=	-O
+X--- 3,9 ----
+X  # All rights reserved.  The Berkeley software License Agreement
+X  # specifies the terms and conditions for redistribution.
+X  #
+X! #	@(#)Makefile	5.12.4 (2.11BSD) 2020/1/4
+X  #
+X  DESTDIR=
+X  CFLAGS=	-O
+X***************
+X*** 14,21 ****
+X  # master tags file (/usr/lib/tags); the Fortran libraries should
+X  # be on this list.
+X  #
+X! TAGSDIR=libcurses libdbm libln libm libmp libpc libtermlib libutil libvmf \
+X! 	liberrlst
+X  
+X  # Programs that live in subdirectories, and have makefiles of their own.
+X  #
+X--- 14,20 ----
+X  # master tags file (/usr/lib/tags); the Fortran libraries should
+X  # be on this list.
+X  #
+X! TAGSDIR=libcurses libdbm libln libmp libtermlib libutil liberrlst
+X  
+X  # Programs that live in subdirectories, and have makefiles of their own.
+X  #
+X*** ./usr/src/Makefile.old	Sun Oct 27 01:08:45 1996
+X--- ./usr/src/Makefile	Sat Jan  4 07:50:44 2020
+X***************
+X*** 3,9 ****
+X  # All rights reserved.  The Berkeley software License Agreement
+X  # specifies the terms and conditions for redistribution.
+X  #
+X! #	@(#)Makefile	4.15	(2.11BSD)	96/10/21
+X  #
+X  # This makefile is designed to be run as:
+X  #	make build
+X--- 3,9 ----
+X  # All rights reserved.  The Berkeley software License Agreement
+X  # specifies the terms and conditions for redistribution.
+X  #
+X! #	@(#)Makefile	4.16	(2.11BSD)	2020/1/4
+X  #
+X  # This makefile is designed to be run as:
+X  #	make build
+X***************
+X*** 60,68 ****
+X  build: buildlib ${SRCDIR}
+X  
+X  buildlib: FRC
+X- 	@echo installing /usr/include
+X- 	# cd include; make ${MFLAGS} DESTDIR=${DESTDIR} install
+X- 	@echo
+X  	@echo compiling libc.a
+X  	cd lib/libc; make ${MFLAGS} ${LIBCDEFS}
+X  	@echo installing /lib/libc.a
+X--- 60,65 ----
+X***************
+X*** 108,114 ****
+X  	done
+X  
+X  tags:
+X! 	for i in include lib usr.lib; do \
+X  		(cd $$i; make ${MFLAGS} TAGSFILE=../tags tags); \
+X  	done
+X  	sort -u +0 -1 -o tags tags
+X--- 105,111 ----
+X  	done
+X  
+X  tags:
+X! 	for i in lib usr.lib; do \
+X  		(cd $$i; make ${MFLAGS} TAGSFILE=../tags tags); \
+X  	done
+X  	sort -u +0 -1 -o tags tags
+X*** ./VERSION.old	Tue Dec 17 07:58:48 2019
+X--- ./VERSION	Sat Jan  4 07:51:14 2020
+X***************
+X*** 1,5 ****
+X! Current Patch Level: 458
+X! Date: December 17, 2019
+X  
+X  2.11 BSD
+X  ============
+X--- 1,5 ----
+X! Current Patch Level: 459
+X! Date: January 4, 2020
+X  
+X  2.11 BSD
+X  ============
+SHAR_EOF
+fi
+if test -f 'stdarg.h'
+then
+	echo shar: "will not over-write existing file 'stdarg.h'"
+else
+sed 's/^X//' << \SHAR_EOF > 'stdarg.h'
+X#ifndef _STDARG_H_
+X#define _STDARG_H_
+X
+X/* 
+X * stdarg.h  1.0  (2.11BSD)  2020/1/4
+X*/
+X
+Xtypedef char *va_list;
+X#define va_start(list, fmt) (list = ((char *)&fmt  + sizeof(fmt)))
+X#define va_end(list)
+X#define va_arg(list,mode) ((mode *)(list += sizeof(mode)))[-1]
+X
+X#endif
+SHAR_EOF
+fi
+exit 0
+#	End of shell archive

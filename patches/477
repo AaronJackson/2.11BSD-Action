@@ -1,0 +1,1160 @@
+Subject: cleanup compilation warnings (#477)
+Index:	 src/, src/bin, src/games, src/usr.bin, src/usr.sbin
+
+Description:
+	1) Recompiling the system from sources emits numerous warning errors.
+	Almost of these are pointer / int in nature and are resolved by
+	inserting "(int)".
+
+	2) Sometimes 'makw' will not think files need to be recompiled  or that
+	libraries do not need to be rebuilt when member object files have been 
+	created.
+
+Repeat-By:
+	Observation.
+
+	1)
+	cd /usr/src
+	make build
+	(note the warning errors)
+
+	2) 'make' uses the timestamps of files to determine if a target needs
+	to be (re)built.  In the past file creation involved several seeks and
+	a rotation or two of slow disks so multiple file creations per second
+	rarely (if ever) happened.  But when 2.11BSD runs in a simulator on
+	a very fast system using solid-state-disks many files can be created
+	in a second.  This can cause make to not (re)build targets because
+	they are up-to-date.
+
+Fix:
+
+	Thanks to bqt@softjar.se for the research and initial patch submission.
+
+	1) Add (int) as needed to 15 files.  As part of the cleanup the 'sccsid'
+	   strings were properly conditonalized.
+
+	2) In one Makefile a 'sleep 1' is added.  It is invoked infrequently
+	in a 'FRC' target but provides enough time to maintain a one second
+	difference in critical files' timestamps.
+	
+	To install this patch cut where indicated and save to a file (/tmp/477)
+
+	Then:
+
+	cd /
+	patch -p0 < /tmp/477
+
+	It is not required to recompile these programs:
+	   
+		   expr
+		   lex
+		   struct
+		   bc
+
+	but doing so will reduce their D-space size.
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.dfupdate.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+*** ./usr/src/bin/expr.y.old	Sun Feb  8 16:24:55 1987
+--- ./usr/src/bin/expr.y	Sun Sep 25 21:44:14 2022
+***************
+*** 25,48 ****
+  
+  
+  expr:	'(' expr ')' = { $$ = $2; }
+! 	| expr OR expr   = { $$ = conj(OR, $1, $3); }
+! 	| expr AND expr   = { $$ = conj(AND, $1, $3); }
+! 	| expr EQ expr   = { $$ = rel(EQ, $1, $3); }
+! 	| expr GT expr   = { $$ = rel(GT, $1, $3); }
+! 	| expr GEQ expr   = { $$ = rel(GEQ, $1, $3); }
+! 	| expr LT expr   = { $$ = rel(LT, $1, $3); }
+! 	| expr LEQ expr   = { $$ = rel(LEQ, $1, $3); }
+! 	| expr NEQ expr   = { $$ = rel(NEQ, $1, $3); }
+! 	| expr ADD expr   = { $$ = arith(ADD, $1, $3); }
+! 	| expr SUBT expr   = { $$ = arith(SUBT, $1, $3); }
+! 	| expr MULT expr   = { $$ = arith(MULT, $1, $3); }
+! 	| expr DIV expr   = { $$ = arith(DIV, $1, $3); }
+! 	| expr REM expr   = { $$ = arith(REM, $1, $3); }
+! 	| expr MCH expr	 = { $$ = match($1, $3); }
+! 	| MATCH expr expr = { $$ = match($2, $3); }
+! 	| SUBSTR expr expr expr = { $$ = substr($2, $3, $4); }
+! 	| LENGTH expr       = { $$ = length($2); }
+! 	| INDEX expr expr = { $$ = index($2, $3); }
+  	| A_STRING
+  	;
+  %%
+--- 25,48 ----
+  
+  
+  expr:	'(' expr ')' = { $$ = $2; }
+! 	| expr OR expr   = { $$ = (int)conj(OR, $1, $3); }
+! 	| expr AND expr   = { $$ = (int)conj(AND, $1, $3); }
+! 	| expr EQ expr   = { $$ = (int)rel(EQ, $1, $3); }
+! 	| expr GT expr   = { $$ = (int)rel(GT, $1, $3); }
+! 	| expr GEQ expr   = { $$ = (int)rel(GEQ, $1, $3); }
+! 	| expr LT expr   = { $$ = (int)rel(LT, $1, $3); }
+! 	| expr LEQ expr   = { $$ = (int)rel(LEQ, $1, $3); }
+! 	| expr NEQ expr   = { $$ = (int)rel(NEQ, $1, $3); }
+! 	| expr ADD expr   = { $$ = (int)arith(ADD, $1, $3); }
+! 	| expr SUBT expr   = { $$ = (int)arith(SUBT, $1, $3); }
+! 	| expr MULT expr   = { $$ = (int)arith(MULT, $1, $3); }
+! 	| expr DIV expr   = { $$ = (int)arith(DIV, $1, $3); }
+! 	| expr REM expr   = { $$ = (int)arith(REM, $1, $3); }
+! 	| expr MCH expr	 = { $$ = (int)match($1, $3); }
+! 	| MATCH expr expr = { $$ = (int)match($2, $3); }
+! 	| SUBSTR expr expr expr = { $$ = (int)substr($2, $3, $4); }
+! 	| LENGTH expr       = { $$ = (int)length($2); }
+! 	| INDEX expr expr = { $$ = (int)index($2, $3); }
+  	| A_STRING
+  	;
+  %%
+***************
+*** 87,93 ****
+  		if(EQL(operators[i], p))
+  			return op[i];
+  
+! 	yylval = p;
+  	return A_STRING;
+  }
+  
+--- 87,93 ----
+  		if(EQL(operators[i], p))
+  			return op[i];
+  
+! 	yylval = (int)p;
+  	return A_STRING;
+  }
+  
+***************
+*** 661,667 ****
+  	return(1);
+  }
+  
+! static char *sccsid = "@(#)expr.y	4.4 (Berkeley) 5/21/84";
+  yyerror(s)
+  
+  {
+--- 661,670 ----
+  	return(1);
+  }
+  
+! #if !defined(lint) && defined(DOSCCS)
+! static char *sccsid = "@(#)expr.y	4.5 (2.11BSD) 2022/9/17";
+! #endif
+! 
+  yyerror(s)
+  
+  {
+*** ./usr/src/games/hack/hack.engrave.c.old	Fri Oct  4 13:19:01 1985
+--- ./usr/src/games/hack/hack.engrave.c	Sun Sep 25 21:21:53 2022
+***************
+*** 1,5 ****
+  /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
+! /* hack.engrave.c - version 1.0.3 */
+  
+  #include	"hack.h"
+  
+--- 1,5 ----
+  /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
+! /* hack.engrave.c - version 1.0.4 */
+  
+  #include	"hack.h"
+  
+***************
+*** 26,32 ****
+  			return(ep);
+  		ep = ep->nxt_engr;
+  	}
+! 	return((struct engr *) 0);
+  }
+  
+  sengr_at(s,x,y) register char *s; register xchar x,y; {
+--- 26,32 ----
+  			return(ep);
+  		ep = ep->nxt_engr;
+  	}
+! 	return(NULL);
+  }
+  
+  sengr_at(s,x,y) register char *s; register xchar x,y; {
+***************
+*** 140,146 ****
+  	if(!otmp) return(0);
+  
+  	if(otmp == &zeroobj)
+! 		otmp = (char *)0;
+  	if(otmp && otmp->otyp == WAN_FIRE && otmp->spe) {
+  		type = BURN;
+  		otmp->spe--;
+--- 140,146 ----
+  	if(!otmp) return(0);
+  
+  	if(otmp == &zeroobj)
+! 		otmp = NULL;
+  	if(otmp && otmp->otyp == WAN_FIRE && otmp->spe) {
+  		type = BURN;
+  		otmp->spe--;
+***************
+*** 150,156 ****
+  			if(uwep && uwep->cursed) {
+  			    /* Andreas Bormann */
+  			    pline("Since your weapon is welded to your hand,");
+! 			    pline("you use the %s.", aobjnam(uwep, (char *) 0));
+  			    otmp = uwep;
+  			} else {
+  			    if(!otmp)
+--- 150,156 ----
+  			if(uwep && uwep->cursed) {
+  			    /* Andreas Bormann */
+  			    pline("Since your weapon is welded to your hand,");
+! 			    pline("you use the %s.", aobjnam(uwep, NULL));
+  			    otmp = uwep;
+  			} else {
+  			    if(!otmp)
+*** ./usr/src/lib/libc/Makefile.old	Thu Aug 28 15:31:47 1997
+--- ./usr/src/lib/libc/Makefile	Sun Sep 25 21:31:13 2022
+***************
+*** 3,9 ****
+  # All rights reserved.  The Berkeley software License Agreement
+  # specifies the terms and conditions for redistribution.
+  #
+! #	@(#)Makefile	4.19.2 (2.11BSD) 1997/8/28
+  #
+  # The system has two monitoring schemes, utilizing either ``prof''
+  # or ``gprof''. DFLMON determines the default profiler; mon.o
+--- 3,9 ----
+  # All rights reserved.  The Berkeley software License Agreement
+  # specifies the terms and conditions for redistribution.
+  #
+! #	@(#)Makefile	4.19.3 (2.11BSD) 2022/9/17
+  #
+  # The system has two monitoring schemes, utilizing either ``prof''
+  # or ``gprof''. DFLMON determines the default profiler; mon.o
+***************
+*** 81,86 ****
+--- 81,87 ----
+  	cd $@; make ${MFLAGS} DEFS=${DEFS}
+  
+  FRC:
++ 	@sleep 1
+  
+  install: libc.a libc_p.a
+  	${INSTALL} libc.a ${DESTDIR}/lib/libc.a
+*** ./usr/src/local/cxref/makefile.old	Tue Jan 26 00:40:29 1993
+--- ./usr/src/local/cxref/makefile	Sun Sep 25 21:21:53 2022
+***************
+*** 25,31 ****
+  PRINTS= $(INCLS) $(SRCS) $(DOCS)
+  
+  CFLAGS= -O
+! LFLAGS= -i
+  
+  ### system dependant definitions, change when you install cxref
+  
+--- 25,31 ----
+  PRINTS= $(INCLS) $(SRCS) $(DOCS)
+  
+  CFLAGS= -O
+! LFLAGS=
+  
+  ### system dependant definitions, change when you install cxref
+  
+*** ./usr/src/ucb/more/more.c.old	Mon Aug 30 08:17:44 2021
+--- ./usr/src/ucb/more/more.c	Sun Sep 25 21:21:53 2022
+***************
+*** 5,11 ****
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)more.c	5.7 (2.11BSD) 2021/8/29";
+  #endif
+  
+  /*
+--- 5,11 ----
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)more.c	5.8 (2.11BSD) 2022/9/17";
+  #endif
+  
+  /*
+***************
+*** 1283,1289 ****
+      context.line = saveln = Currline;
+      context.chrctr = startline;
+      lncount = 0;
+!     if ((s = re_comp (buf)) != 0)
+  	error (s);
+      while (!feof (file)) {
+  	line3 = line2;
+--- 1283,1289 ----
+      context.line = saveln = Currline;
+      context.chrctr = startline;
+      lncount = 0;
+!     if ((s = (char *)re_comp (buf)) != 0)
+  	error (s);
+      while (!feof (file)) {
+  	line3 = line2;
+*** ./usr/src/usr.bin/tbl/t9.c.old	Mon Jan 18 11:37:16 1993
+--- ./usr/src/usr.bin/tbl/t9.c	Sun Sep 25 21:46:31 2022
+***************
+*** 1,5 ****
+! #ifndef lint
+! static char sccsid[] = "@(#)t9.c	4.2 8/11/83";
+  #endif
+  
+   /* t9.c: write lines for tables over 200 lines */
+--- 1,5 ----
+! #if !defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)t9.c	4.3 (2.11BSD) 2022/9/17";
+  #endif
+  
+   /* t9.c: write lines for tables over 200 lines */
+***************
+*** 49,55 ****
+  	switch(ctype(useln,icol))
+  		{
+  		case 'n':
+! 			table[0][icol].rcol = maknew(table[0][icol].col);
+  			break;
+  		case 'a':
+  			table[0][icol].rcol = table[0][icol].col;
+--- 49,55 ----
+  	switch(ctype(useln,icol))
+  		{
+  		case 'n':
+! 			table[0][icol].rcol = (char *)maknew(table[0][icol].col);
+  			break;
+  		case 'a':
+  			table[0][icol].rcol = table[0][icol].col;
+*** ./usr/src/usr.bin/refer/inv5.c.old	Mon Feb 16 18:20:58 1987
+--- ./usr/src/usr.bin/refer/inv5.c	Sun Sep 25 21:46:41 2022
+***************
+*** 1,5 ****
+! #ifndef lint
+! static char *sccsid = "@(#)inv5.c	4.2 (Berkeley) 1/9/85";
+  #endif
+  
+  #include <stdio.h>
+--- 1,5 ----
+! #if !defined(lint) && defined(DOSCCS)
+! static char *sccsid = "@(#)inv5.c	4.3 (2.11BSD) 2022/9/17";
+  #endif
+  
+  #include <stdio.h>
+***************
+*** 36,42 ****
+  		fprintf(stderr, "Changing hash value to old %d\n",n);
+  	fclose(fa);
+  	if (iflong)
+! 		getfun = getl;
+  	else
+  		getfun = getw;
+  	for(i=0; i<n; i++)
+--- 36,42 ----
+  		fprintf(stderr, "Changing hash value to old %d\n",n);
+  	fclose(fa);
+  	if (iflong)
+! 		getfun = (int (*)())getl;
+  	else
+  		getfun = getw;
+  	for(i=0; i<n; i++)
+*** ./usr/src/usr.bin/refer/glue3.c.old	Wed Oct 23 23:26:40 1996
+--- ./usr/src/usr.bin/refer/glue3.c	Sun Sep 25 21:21:53 2022
+***************
+*** 1,5 ****
+  #if	!defined(lint) && defined(DOSCCS)
+! static char *sccsid = "@(#)glue3.c	4.1.1 (2.11BSD) 1996/10/23";
+  #endif
+  
+  #include "refer..c"
+--- 1,5 ----
+  #if	!defined(lint) && defined(DOSCCS)
+! static char *sccsid = "@(#)glue3.c	4.1.2 (2.11BSD) 2022/9/17";
+  #endif
+  
+  #include "refer..c"
+***************
+*** 56,67 ****
+  	argv[2] = in;
+  	argv[3] = "-t";
+  	argv[4] = out;
+! 	argv[5] = outlen;
+  	argv[6] = "-T";
+  	argv[7] = "-F1";
+  	argv[8] = "-o";
+  	argv[9] = one;
+! 	argv[10] = onelen;
+  	argv[11] = abuff; 
+  	strcpy (abuff,arg);
+  	if (strlen(abuff) > ALEN)
+--- 56,67 ----
+  	argv[2] = in;
+  	argv[3] = "-t";
+  	argv[4] = out;
+! 	argv[5] = (char *)outlen;
+  	argv[6] = "-T";
+  	argv[7] = "-F1";
+  	argv[8] = "-o";
+  	argv[9] = one;
+! 	argv[10] = (char *)onelen;
+  	argv[11] = abuff; 
+  	strcpy (abuff,arg);
+  	if (strlen(abuff) > ALEN)
+*** ./usr/src/usr.bin/lex/sub2.c.old	Mon Feb 16 18:21:52 1987
+--- ./usr/src/usr.bin/lex/sub2.c	Sun Sep 25 21:47:34 2022
+***************
+*** 1,5 ****
+! #ifndef lint
+! static char sccsid[] = "@(#)sub2.c	4.1 (Berkeley) 8/11/83";
+  #endif
+  
+  # include "ldefs.c"
+--- 1,5 ----
+! #if	!defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)sub2.c	4.2 (2.11BSD) 2022/9/17";
+  #endif
+  
+  # include "ldefs.c"
+***************
+*** 26,32 ****
+  			else if(i == RCCL || i == RNCCL){	/* compress ccl list */
+  				for(j=1; j<NCH;j++)
+  					symbol[j] = (i==RNCCL);
+! 				p = left[v];
+  				while(*p)
+  					symbol[*p++] = (i == RCCL);
+  				p = pcptr;
+--- 26,32 ----
+  			else if(i == RCCL || i == RNCCL){	/* compress ccl list */
+  				for(j=1; j<NCH;j++)
+  					symbol[j] = (i==RNCCL);
+! 				p = (char *)left[v];
+  				while(*p)
+  					symbol[*p++] = (i == RCCL);
+  				p = pcptr;
+***************
+*** 40,46 ****
+  				*pcptr++ = 0;
+  				if(pcptr > pchar + pchlen)
+  					error("Too many packed character classes");
+! 				left[v] = p;
+  				name[v] = RCCL;	/* RNCCL eliminated */
+  # ifdef DEBUG
+  				if(debug && *p){
+--- 40,46 ----
+  				*pcptr++ = 0;
+  				if(pcptr > pchar + pchlen)
+  					error("Too many packed character classes");
+! 				left[v] = (int)p;
+  				name[v] = RCCL;	/* RNCCL eliminated */
+  # ifdef DEBUG
+  				if(debug && *p){
+***************
+*** 173,179 ****
+  			break;
+  		case RSCON:
+  			i = stnum/2 +1;
+! 			p = right[v];
+  			while(*p)
+  				if(*p++ == i){
+  					first(left[v]);
+--- 173,179 ----
+  			break;
+  		case RSCON:
+  			i = stnum/2 +1;
+! 			p = (char *)right[v];
+  			while(*p)
+  				if(*p++ == i){
+  					first(left[v]);
+***************
+*** 241,247 ****
+  			else switch(name[curpos]){
+  			case RCCL:
+  				tryit = TRUE;
+! 				q = left[curpos];
+  				while(*q){
+  					for(j=1;j<NCH;j++)
+  						if(cindex[j] == *q)
+--- 241,247 ----
+  			else switch(name[curpos]){
+  			case RCCL:
+  				tryit = TRUE;
+! 				q = (char *)left[curpos];
+  				while(*q){
+  					for(j=1;j<NCH;j++)
+  						if(cindex[j] == *q)
+***************
+*** 852,858 ****
+  		else
+  			{
+  			int *fbarr;
+! 			fbarr = myalloc(2*NCH, sizeof(*fbarr));
+  			if (fbarr==0)
+  				error("No space for char table reverse",0);
+  			for(i=0; i<ZCH; i++)
+--- 852,858 ----
+  		else
+  			{
+  			int *fbarr;
+! 			fbarr = (int *)myalloc(2*NCH, sizeof(*fbarr));
+  			if (fbarr==0)
+  				error("No space for char table reverse",0);
+  			for(i=0; i<ZCH; i++)
+*** ./usr/src/usr.bin/lex/parser.y.old	Mon Feb 16 18:21:52 1987
+--- ./usr/src/usr.bin/lex/parser.y	Sun Sep 25 21:47:11 2022
+***************
+*** 8,15 ****
+  %left '*' '+' '?'
+  
+  %{
+! #ifndef lint
+! static char sccsid[] = "@(#)parser.y	4.1 (Berkeley) 8/11/83";
+  #endif
+  
+  # include "ldefs.c"
+--- 8,15 ----
+  %left '*' '+' '?'
+  
+  %{
+! #if !defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)parser.y	4.2 (2.11BSD) 2022/9/17";
+  #endif
+  
+  # include "ldefs.c"
+***************
+*** 93,99 ****
+  	={	$$ = mn0($1); }
+  	| STR
+  	={
+! 		p = $1;
+  		i = mn0(*p++);
+  		while(*p)
+  			i = mn2(RSTR,i,*p++);
+--- 93,99 ----
+  	={	$$ = mn0($1); }
+  	| STR
+  	={
+! 		p = (char *)$1;
+  		i = mn0(*p++);
+  		while(*p)
+  			i = mn2(RSTR,i,*p++);
+***************
+*** 241,256 ****
+  						sectbegin = TRUE;
+  						i = treesize*(sizeof(*name)+sizeof(*left)+
+  							sizeof(*right)+sizeof(*nullstr)+sizeof(*parent))+ALITTLEEXTRA;
+! 						c = myalloc(i,1);
+  						if(c == 0)
+  							error("Too little core for parse tree");
+! 						p = c;
+  						cfree(p,i,1);
+! 						name = myalloc(treesize,sizeof(*name));
+! 						left = myalloc(treesize,sizeof(*left));
+! 						right = myalloc(treesize,sizeof(*right));
+  						nullstr = myalloc(treesize,sizeof(*nullstr));
+! 						parent = myalloc(treesize,sizeof(*parent));
+  						if(name == 0 || left == 0 || right == 0 || parent == 0 || nullstr == 0)
+  							error("Too little core for parse tree");
+  						return(freturn(DELIM));
+--- 241,256 ----
+  						sectbegin = TRUE;
+  						i = treesize*(sizeof(*name)+sizeof(*left)+
+  							sizeof(*right)+sizeof(*nullstr)+sizeof(*parent))+ALITTLEEXTRA;
+! 						c = (int)myalloc(i,1);
+  						if(c == 0)
+  							error("Too little core for parse tree");
+! 						p = (char *)c;
+  						cfree(p,i,1);
+! 						name = (int *)myalloc(treesize,sizeof(*name));
+! 						left = (int *)myalloc(treesize,sizeof(*left));
+! 						right = (int *)myalloc(treesize,sizeof(*right));
+  						nullstr = myalloc(treesize,sizeof(*nullstr));
+! 						parent = (int *)myalloc(treesize,sizeof(*parent));
+  						if(name == 0 || left == 0 || right == 0 || parent == 0 || nullstr == 0)
+  							error("Too little core for parse tree");
+  						return(freturn(DELIM));
+***************
+*** 398,404 ****
+  					prev = *p;
+  					*p = 0;
+  					bptr = p+1;
+! 					yylval = buf;
+  					if(digit(buf[0]))
+  						warning("Substitution strings may not begin with digits");
+  					return(freturn(STR));
+--- 398,404 ----
+  					prev = *p;
+  					*p = 0;
+  					bptr = p+1;
+! 					yylval = (int)buf;
+  					if(digit(buf[0]))
+  						warning("Substitution strings may not begin with digits");
+  					return(freturn(STR));
+***************
+*** 411,417 ****
+  				if(*p == 0)
+  					warning("No translation given - null string assumed");
+  				scopy(p,token);
+! 				yylval = token;
+  				prev = '\n';
+  				return(freturn(STR));
+  				}
+--- 411,417 ----
+  				if(*p == 0)
+  					warning("No translation given - null string assumed");
+  				scopy(p,token);
+! 				yylval = (int)token;
+  				prev = '\n';
+  				return(freturn(STR));
+  				}
+***************
+*** 562,568 ****
+  					}
+  				if(slptr > slist+STARTSIZE)		/* note not packed ! */
+  					error("Too many start conditions used");
+! 				yylval = t;
+  				x = SCON;
+  				break;
+  			case '"':
+--- 562,568 ----
+  					}
+  				if(slptr > slist+STARTSIZE)		/* note not packed ! */
+  					error("Too many start conditions used");
+! 				yylval = (int)t;
+  				x = SCON;
+  				break;
+  			case '"':
+***************
+*** 588,594 ****
+  					x = CHAR;
+  					}
+  				else {
+! 					yylval = token;
+  					x = STR;
+  					}
+  				break;
+--- 588,594 ----
+  					x = CHAR;
+  					}
+  				else {
+! 					yylval = (int)token;
+  					x = STR;
+  					}
+  				break;
+***************
+*** 632,640 ****
+  					while(p <ccptr && scomp(token,p) != 0)p++;
+  					}
+  				if(p < ccptr)	/* found it */
+! 					yylval = p;
+  				else {
+! 					yylval = ccptr;
+  					scopy(token,ccptr);
+  					ccptr += slength(token) + 1;
+  					if(ccptr >= ccl+CCLSIZE)
+--- 632,640 ----
+  					while(p <ccptr && scomp(token,p) != 0)p++;
+  					}
+  				if(p < ccptr)	/* found it */
+! 					yylval = (int)p;
+  				else {
+! 					yylval = (int)ccptr;
+  					scopy(token,ccptr);
+  					ccptr += slength(token) + 1;
+  					if(ccptr >= ccl+CCLSIZE)
+***************
+*** 653,659 ****
+  					}
+  				if(alpha(peek)){
+  					i = 0;
+! 					yylval = token;
+  					token[i++] = c;
+  					while(alpha(peek))
+  						token[i++] = gch();
+--- 653,659 ----
+  					}
+  				if(alpha(peek)){
+  					i = 0;
+! 					yylval = (int)token;
+  					token[i++] = c;
+  					while(alpha(peek))
+  						token[i++] = gch();
+*** ./usr/src/usr.bin/lex/sub1.c.old	Wed Mar 11 22:13:13 1987
+--- ./usr/src/usr.bin/lex/sub1.c	Sun Sep 25 21:47:26 2022
+***************
+*** 1,5 ****
+! #ifndef lint
+! static char sccsid[] = "@(#)sub1.c	4.2 (Berkeley) 2/21/85";
+  #endif
+  
+  # include "ldefs.c"
+--- 1,5 ----
+! #if	!defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)sub1.c	4.3 (2.11BSD) 2022/9/17";
+  #endif
+  
+  # include "ldefs.c"
+***************
+*** 497,503 ****
+  	register int i,j;
+  	if(t == 'c'){
+  		*pushptr++ = peek;		/* watch out for this */
+! 		peek = p;
+  		}
+  	else if(t == 's'){
+  		*pushptr++ = peek;
+--- 497,503 ----
+  	register int i,j;
+  	if(t == 'c'){
+  		*pushptr++ = peek;		/* watch out for this */
+! 		peek = (int)p;
+  		}
+  	else if(t == 's'){
+  		*pushptr++ = peek;
+*** ./usr/src/usr.bin/struct/beauty.y.old	Mon Feb 16 18:21:19 1987
+--- ./usr/src/usr.bin/struct/beauty.y	Sun Sep 25 21:47:56 2022
+***************
+*** 14,22 ****
+  %right	'^'
+  
+  %{
+! #ifndef lint
+! static char sccsid[] = "@(#)beauty.y	4.1	(Berkeley)	2/11/83";
+! #endif not lint
+  
+  #include "b.h"
+  #include <stdio.h>
+--- 14,22 ----
+  %right	'^'
+  
+  %{
+! #if	!defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)beauty.y	4.2	(2.11BSD)	2022/9/17";
+! #endif
+  
+  #include "b.h"
+  #include <stdio.h>
+***************
+*** 129,135 ****
+  	|
+  	;
+  
+! pred:	'(' expr ')'	=	{ t = checkneg($2,0);
+  				yield(t,100);  freetree(t);	};
+  
+  expr:		'(' expr ')'	=	$$ = $2;
+--- 129,135 ----
+  	|
+  	;
+  
+! pred:	'(' expr ')'	=	{ t = (struct node *)checkneg($2,0);
+  				yield(t,100);  freetree(t);	};
+  
+  expr:		'(' expr ')'	=	$$ = $2;
+***************
+*** 302,311 ****
+  #define MID	1
+  #define CONT	2
+  
+! 	if (buffer == 0)
+  		{
+! 		buffer = malloc(xxmaxchars);
+! 		if (buffer == 0) error("malloc out of space","","");
+  		}
+  	tlen = slength(token);
+  	if (tlen == 0) return;
+--- 302,311 ----
+  #define MID	1
+  #define CONT	2
+  
+! 	if (buffer == NULL)
+  		{
+! 		buffer = (char *)malloc(xxmaxchars);
+! 		if (buffer == NULL) error("malloc out of space","","");
+  		}
+  	tlen = slength(token);
+  	if (tlen == 0) return;
+*** ./usr/src/usr.bin/struct/lextab.l.old	Mon Feb 16 18:21:19 1987
+--- ./usr/src/usr.bin/struct/lextab.l	Sun Sep 25 21:48:15 2022
+***************
+*** 1,8 ****
+  %{
+  
+! #ifndef lint
+! static char sccsid[] = "@(#)lextab.l	4.1	(Berkeley)	2/11/83";
+! #endif not lint
+  
+  #include "y.tab.h"
+  #include "b.h"
+--- 1,8 ----
+  %{
+  
+! #if	!defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)lextab.l	4.2	(2.11BSD)	2022/9/17";
+! #endif
+  
+  #include "y.tab.h"
+  #include "b.h"
+***************
+*** 37,43 ****
+  [=/,(]{D}+[h]			{
+  				blflag = 1;
+  				sscanf(&yytext[1],"%d",&xxn);
+! 				xxtbuff = malloc(2*xxn+3);
+  				for (xxj = xxk = 1; xxj <= xxn; ++xxj)
+  					{
+  					xxtbuff[xxk] = ninput();
+--- 37,43 ----
+  [=/,(]{D}+[h]			{
+  				blflag = 1;
+  				sscanf(&yytext[1],"%d",&xxn);
+! 				xxtbuff = (char *)malloc(2*xxn+3);
+  				for (xxj = xxk = 1; xxj <= xxn; ++xxj)
+  					{
+  					xxtbuff[xxk] = ninput();
+***************
+*** 97,105 ****
+  \"([^"]|\"\")*\"		{fixval(); xxbp = -1; return(xxstring); }
+  '([^']|'')*'				{
+  					fixval();
+! 					xxp = yylval;
+  					xxn = slength(xxp);
+! 					xxtbuff = malloc(2*xxn+1);
+  					xxtbuff[0] = '"';
+  					for (xxj = xxk = 1; xxj < xxn-1; ++xxj)
+  						{
+--- 97,105 ----
+  \"([^"]|\"\")*\"		{fixval(); xxbp = -1; return(xxstring); }
+  '([^']|'')*'				{
+  					fixval();
+! 					xxp = (char *)yylval;
+  					xxn = slength(xxp);
+! 					xxtbuff = (char *)malloc(2*xxn+1);
+  					xxtbuff[0] = '"';
+  					for (xxj = xxk = 1; xxj < xxn-1; ++xxj)
+  						{
+***************
+*** 116,122 ****
+  					xxtbuff[xxk++] = '"';
+  					xxtbuff[xxk] = '\0';
+  					free(xxp);
+! 					yylval = xxtbuff;
+  					xxbp = -1;
+  					return(xxstring);
+  					}
+--- 116,122 ----
+  					xxtbuff[xxk++] = '"';
+  					xxtbuff[xxk] = '\0';
+  					free(xxp);
+! 					yylval = (int)xxtbuff;
+  					xxbp = -1;
+  					return(xxstring);
+  					}
+*** ./usr/src/usr.bin/bc.y.old	Wed Oct 23 21:55:17 1996
+--- ./usr/src/usr.bin/bc.y	Sun Sep 25 21:48:44 2022
+***************
+*** 1,5 ****
+  %{
+! static	char *sccsid = "@(#)bc.y	4.3.1 (2.11BSD) 1996/10/23";
+  	int *getout();
+  %}
+  %right '='
+--- 1,7 ----
+  %{
+! #if	!defined(lint) && defined(DOSCCS)
+! static	char *sccsid = "@(#)bc.y	4.3.2 (2.11BSD) 2022/9/17";
+! #endif
+  	int *getout();
+  %}
+  %right '='
+***************
+*** 109,125 ****
+  	;
+  
+  EQOP	:  EQPL
+! 		={ $$ = "+"; }
+  	|  EQMI
+! 		={ $$ = "-"; }
+  	|  EQMUL
+! 		={ $$ = "*"; }
+  	|  EQDIV
+! 		={ $$ = "/"; }
+  	|  EQREM
+! 		={ $$ = "%%"; }
+  	|  EQEXP
+! 		={ $$ = "^"; }
+  	;
+  
+  fprefix	:  _FOR '(' e ';'
+--- 111,127 ----
+  	;
+  
+  EQOP	:  EQPL
+! 		={ $$ = (int)"+"; }
+  	|  EQMI
+! 		={ $$ = (int)"-"; }
+  	|  EQMUL
+! 		={ $$ = (int)"*"; }
+  	|  EQDIV
+! 		={ $$ = (int)"/"; }
+  	|  EQREM
+! 		={ $$ = (int)"%%"; }
+  	|  EQEXP
+! 		={ $$ = (int)"^"; }
+  	;
+  
+  fprefix	:  _FOR '(' e ';'
+***************
+*** 225,231 ****
+  	|  cons DOT
+  		={ bundle(3, " ", $1, "." ); }
+  	|  DOT
+! 		={ $$ = "l."; }
+  	|  LETTER
+  		= { bundle(2, "l", $1 ); }
+  	|  LETTER '=' e
+--- 227,233 ----
+  	|  cons DOT
+  		={ bundle(3, " ", $1, "." ); }
+  	|  DOT
+! 		={ $$ = (int)"l."; }
+  	|  LETTER
+  		= { bundle(2, "l", $1 ); }
+  	|  LETTER '=' e
+***************
+*** 282,296 ****
+  
+  constant:
+  	  '_'
+! 		={ $$ = cp; *cp++ = '_'; }
+  	|  DIGIT
+! 		={ $$ = cp; *cp++ = $1; }
+  	|  constant DIGIT
+  		={ *cp++ = $2; }
+  	;
+  
+  CRS	:
+! 		={ $$ = cp; *cp++ = crs++; *cp++ = '\0';
+  			if(crs == '[')crs+=3;
+  			if(crs == 'a')crs='{';
+  			if(crs >= 0241){yyerror("program too big");
+--- 284,298 ----
+  
+  constant:
+  	  '_'
+! 		={ $$ = (int)cp; *cp++ = '_'; }
+  	|  DIGIT
+! 		={ $$ = (int)cp; *cp++ = $1; }
+  	|  constant DIGIT
+  		={ *cp++ = $2; }
+  	;
+  
+  CRS	:
+! 		={ $$ = (int)cp; *cp++ = crs++; *cp++ = '\0';
+  			if(crs == '[')crs+=3;
+  			if(crs == 'a')crs='{';
+  			if(crs >= 0241){yyerror("program too big");
+***************
+*** 300,308 ****
+  	;
+  
+  def	:  _DEFINE LETTER '('
+! 		={	$$ = getf($2);
+! 			pre = "";
+! 			post = "";
+  			lev = 1;
+  			bstack[bindx=0] = 0;
+  			}
+--- 302,310 ----
+  	;
+  
+  def	:  _DEFINE LETTER '('
+! 		={	$$ = (int)getf($2);
+! 			pre = (int *)"";
+! 			post = (int *)"";
+  			lev = 1;
+  			bstack[bindx=0] = 0;
+  			}
+***************
+*** 322,328 ****
+  	;
+  lora	:  LETTER
+  	|  LETTER '[' ']'
+! 		={ $$ = geta($1); }
+  	;
+  
+  %%
+--- 324,330 ----
+  	;
+  lora	:  LETTER
+  	|  LETTER '[' ']'
+! 		={ $$ = (int)geta($1); }
+  	;
+  
+  %%
+***************
+*** 385,391 ****
+  
+  		/* usual case; just one single letter */
+  
+! 		yylval = letr[c-'a'];
+  		return( LETTER );
+  	}
+  	if( c>= '0' && c <= '9' || c>= 'A' && c<= 'F' ){
+--- 387,393 ----
+  
+  		/* usual case; just one single letter */
+  
+! 		yylval = (int)letr[c-'a'];
+  		return( LETTER );
+  	}
+  	if( c>= '0' && c <= '9' || c>= 'A' && c<= 'F' ){
+***************
+*** 430,436 ****
+  	case '^':
+  		return( cpeek( '=', EQEXP, '^' ) );
+  	case '"':	
+! 		 yylval = str;
+  		 while((c=getch()) != '"'){*str++ = c;
+  			if(str >= &string[999]){yyerror("string space exceeded");
+  			getout();
+--- 432,438 ----
+  	case '^':
+  		return( cpeek( '=', EQEXP, '^' ) );
+  	case '"':	
+! 		 yylval = (int)str;
+  		 while((c=getch()) != '"'){*str++ = c;
+  			if(str >= &string[999]){yyerror("string space exceeded");
+  			getout();
+***************
+*** 487,494 ****
+  		* b_sp_nxt++ = *p++;
+  	}
+  	* b_sp_nxt++ = 0;
+! 	yyval = q;
+! 	return( q );
+  }
+  
+  routput(p) int *p; {
+--- 489,496 ----
+  		* b_sp_nxt++ = *p++;
+  	}
+  	* b_sp_nxt++ = 0;
+! 	yyval = (int)q;
+! 	return( (int)q );
+  }
+  
+  routput(p) int *p; {
+***************
+*** 532,547 ****
+  	/* puts the relevant stuff on pre and post for the letter s */
+  
+  	bundle(3, "S", s, pre );
+! 	pre = yyval;
+  	bundle(4, post, "L", s, "s." );
+! 	post = yyval;
+  }
+  
+  tp( s ) char *s; { /* same as pp, but for temps */
+  	bundle(3, "0S", s, pre );
+! 	pre = yyval;
+  	bundle(4, post, "L", s, "s." );
+! 	post = yyval;
+  }
+  
+  yyinit(argc,argv) int argc; char *argv[];{
+--- 534,549 ----
+  	/* puts the relevant stuff on pre and post for the letter s */
+  
+  	bundle(3, "S", s, pre );
+! 	pre = (int *)yyval;
+  	bundle(4, post, "L", s, "s." );
+! 	post = (int *)yyval;
+  }
+  
+  tp( s ) char *s; { /* same as pp, but for temps */
+  	bundle(3, "0S", s, pre );
+! 	pre = (int *)yyval;
+  	bundle(4, post, "L", s, "s." );
+! 	post = (int *)yyval;
+  }
+  
+  yyinit(argc,argv) int argc; char *argv[];{
+***************
+*** 565,575 ****
+  
+  int *
+  getf(p) char *p;{
+! 	return(&funtab[2*(*p -0141)]);
+  }
+  int *
+  geta(p) char *p;{
+! 	return(&atab[2*(*p - 0141)]);
+  }
+  
+  main(argc, argv)
+--- 567,577 ----
+  
+  int *
+  getf(p) char *p;{
+! 	return((int *)&funtab[2*(*p -0141)]);
+  }
+  int *
+  geta(p) char *p;{
+! 	return((int *)&atab[2*(*p - 0141)]);
+  }
+  
+  main(argc, argv)
+*** ./usr/src/usr.sbin/inetd/inetd.c.old	Wed Nov 13 23:38:51 1996
+--- ./usr/src/usr.sbin/inetd/inetd.c	Sun Sep 25 21:49:02 2022
+***************
+*** 36,43 ****
+  "@(#) Copyright (c) 1983, 1991, 1993, 1994\n\
+  	The Regents of the University of California.  All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)inetd.c	8.4.1 (2.11BSD) 1996/10/30";
+! #endif /* not lint */
+  
+  /*
+   * Inetd - Internet super-server
+--- 36,43 ----
+  "@(#) Copyright (c) 1983, 1991, 1993, 1994\n\
+  	The Regents of the University of California.  All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)inetd.c	8.4.2 (2.11BSD) 2022/9/17";
+! #endif
+  
+  /*
+   * Inetd - Internet super-server
+***************
+*** 161,167 ****
+  */
+  #define	__P(x)	()
+  #define	memmove(dst,src,len)	bcopy(src,dst,len)
+- #define	SEEK_SET	0	/* L_SET */
+  #define	LINE_MAX	1024	/* we don't have this in syslimits.h */
+  
+  void		chargen_dg __P((int, struct servtab *));
+--- 161,166 ----
+*** ./VERSION.old	Thu Sep  1 06:37:58 2022
+--- ./VERSION	Sun Sep 25 21:41:09 2022
+***************
+*** 1,5 ****
+! Current Patch Level: 476
+! Date: August 30, 2022
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 477
+! Date: September 25, 2022
+  
+  2.11 BSD
+  ============

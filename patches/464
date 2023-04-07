@@ -1,0 +1,101 @@
+Subject: sysctl coremap/swapmap retrieval error
+Index:	 src/sys/sys/kern_sysctl.c
+
+Description:
+	The change to kern_sysctl.c in patch #463 had been corrupted in
+	reception.  This meant that the .m_map part was not applied.
+
+Repeat-By:
+	Attempt to read either the coremap or swapmap using sysctl(3).
+
+	The attempt will fail because an invalid address is being used in
+	the kernel 
+	
+Fix:
+	Rather than quietly edit the already existing patch 463 a new
+	'emergency' patch #464 is being issued.  Problem of course with 
+	revising a published patch is some downloads may have already happened.
+
+	Cut where indicated and save to a file (/tmp/464) and then:
+
+cd /
+patch -p0 < /tmp/464
+
+recompile & install your kernel(s)
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.update.uu.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+*** ./VERSION.old	Tue Mar  3 10:12:39 2020
+--- ./VERSION	Thu Mar  5 20:57:06 2020
+***************
+*** 1,5 ****
+! Current Patch Level: 463
+! Date: March 3, 2020
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 464
+! Date: March 5, 2020
+  
+  2.11 BSD
+  ============
+*** ./usr/src/sys/sys/kern_sysctl.c.old	Tue Mar  3 09:02:29 2020
+--- ./usr/src/sys/sys/kern_sysctl.c	Thu Mar  5 22:10:34 2020
+***************
+*** 33,39 ****
+   * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+   * SUCH DAMAGE.
+   *
+!  *	@(#)kern_sysctl.c	8.5 (2.11BSD) 2020/3/2
+   */
+  
+  /*
+--- 33,39 ----
+   * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+   * SUCH DAMAGE.
+   *
+!  *	@(#)kern_sysctl.c	8.6 (2.11BSD) 2020/3/5
+   */
+  
+  /*
+***************
+*** 454,460 ****
+  					(char *)swapmap[0].m_map;
+  			return(0);
+  		}
+! 		return (sysctl_rdstruct(oldp, oldlenp, newp, swapmap[0],
+  			(int)swapmap[0].m_limit - (int)swapmap[0].m_map));
+  	case VM_COREMAP:
+  		if (oldp == NULL) {
+--- 454,460 ----
+  					(char *)swapmap[0].m_map;
+  			return(0);
+  		}
+! 		return (sysctl_rdstruct(oldp, oldlenp, newp, swapmap[0].m_map,
+  			(int)swapmap[0].m_limit - (int)swapmap[0].m_map));
+  	case VM_COREMAP:
+  		if (oldp == NULL) {
+***************
+*** 462,468 ****
+  					(char *)coremap[0].m_map;
+  			return(0);
+  		}
+! 		return (sysctl_rdstruct(oldp, oldlenp, newp, coremap[0],
+  			(int)coremap[0].m_limit - (int)coremap[0].m_map));
+  	case VM_NSWAP:
+  		return (sysctl_rdint(oldp, oldlenp, newp, nswap));
+--- 462,468 ----
+  					(char *)coremap[0].m_map;
+  			return(0);
+  		}
+! 		return (sysctl_rdstruct(oldp, oldlenp, newp, coremap[0].m_map,
+  			(int)coremap[0].m_limit - (int)coremap[0].m_map));
+  	case VM_NSWAP:
+  		return (sysctl_rdint(oldp, oldlenp, newp, nswap));
