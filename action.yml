@@ -11,6 +11,11 @@ inputs:
     description: "Your shell command block"
     required: true
 
+  patch_level:
+    description: 457 to 479
+    required: false
+    default: 457
+
 outputs:
   blank:
     description: "dunno if i need this yet"
@@ -42,7 +47,7 @@ runs:
     - name: download 2.11bsd image
       shell: bash
       run: |
-        curl -so ../ci.dsk.gz https://asjackson.s3.fr-par.scw.cloud/211bsd/ci.dsk.gz
+        curl -so ../ci.dsk.gz https://asjackson.s3.fr-par.scw.cloud/211bsd/ci-${{ inputs.patch_level }}.dsk.gz
 
     - name: run command block
       shell: bash
