@@ -35,7 +35,14 @@ jobs:
           aws_secret_access_key = ${{ secrets.SCW_SECRET_KEY }}
           CREDS
 
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_458
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-458.dsk.gz
+
       - name: apply 458
+        if: steps.built_458.outcome != 'success'
         uses: ./
         with:
           path: /github
@@ -54,7 +61,36 @@ jobs:
             cd /sys/GENERIC
             make
             cp unix /genunix
- 
-      - run: |
+
+      - if: steps.built_458.outcome != 'success'
+        run: |
           gzip ../ci.dsk
-          aws s3 cp ../ci.dsk.gz s3://asjackson/211bsd/ci-458.dsk.gz
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-458.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_459
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-459.dsk.gz
+
+      - name: apply 459
+        if: steps.built_459.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 458
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/459 > /tmp/459.sh
+            cd /tmp
+            sh 459.sh
+            cd /
+            patch -p0 < /tmp/459.patch
+            install -c -m 444 -o root -g wheel /tmp/stdarg.h /usr/include
+            rm /usr/include/vaxuba
+            rm /usr/src/asm.sed*
+            rm -r /usr/src/include
+
+      - if: steps.built_459.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-459.dsk.gz

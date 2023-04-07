@@ -47,7 +47,7 @@ runs:
     - name: download 2.11bsd image
       shell: bash
       run: |
-        curl -so ../ci.dsk.gz https://asjackson.s3.fr-par.scw.cloud/211bsd/ci-${{ inputs.patch_level }}.dsk.gz
+        curl -so ../ci.dsk.gz https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-${{ inputs.patch_level }}.dsk.gz
 
     - name: run command block
       shell: bash
