@@ -67,6 +67,15 @@ checkrun "$line"
 EOF
 done <<< "$arg_run"
 
+cat >> pdp.expect <<EOF
+expect "# " {send "sync\n"}
+sleep 2
+expect "# " {send "halt\n"}
+
+set timeout 10
+expect "sim>" {send "exit\n"}
+EOF
+
 chmod +x pdp.expect
 ./pdp.expect
 exit $?

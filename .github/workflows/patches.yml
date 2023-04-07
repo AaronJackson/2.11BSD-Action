@@ -1,0 +1,60 @@
+on:
+  push:
+    # paths:
+    #   - patches/**
+    #   - .github/workflows/patches.yml
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    name: apply patches
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: configure aws cli for s3 uploads
+        run: |
+          pip install awscli-plugin-endpoint
+
+          mkdir ~/.aws
+          cat > ~/.aws/config <<CONF
+          [plugins]
+          endpoint = awscli_plugin_endpoint
+
+          [default]
+          region = ${SCW_REGION}
+          s3 =
+            endpoint_url = https://s3.fr-par.scw.cloud
+            signature_version = s3v4
+          s3api =
+            endpoint_url = https://s3.fr-par.scw.cloud
+          CONF
+          cat > ~/.aws/credentials <<CREDS
+          [default]
+          aws_access_key_id = ${{ secrets.SCW_ACCESS_KEY_ID }}
+          aws_secret_access_key = ${{ secrets.SCW_SECRET_KEY }}
+          CREDS
+
+      - name: apply 458
+        uses: ./
+        with:
+          path: /github
+          patch_level: 457
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/458 > /tmp/458.patch
+            cd /
+            patch -p0 < /tmp/458.patch
+            cd /usr/src/bin/tcsh
+            make
+            make install
+            make clean
+            cd /sys/SIMH
+            make
+            make install
+            cd /sys/GENERIC
+            make
+            cp unix /genunix
+ 
+      - run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson/211bsd/ci-458.dsk.gz
