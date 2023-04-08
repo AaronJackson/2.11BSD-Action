@@ -426,3 +426,31 @@ jobs:
         run: |
           gzip ../ci.dsk
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-468.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_469
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-469.dsk.gz
+
+      - name: apply 469
+        if: steps.built_469.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 468
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/469 > /tmp/469.sh
+            cd /tmp
+            sh 469.sh
+            install -c -m 444 northamerica /usr/src/share/zoneinfo/northamerica
+            cd /
+            patch -p0 < /tmp/469.patch
+            cd /usr/src/share/zoneinfo
+            make install
+            make clean
+
+      - if: steps.built_469.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-469.dsk.gz
