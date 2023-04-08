@@ -62,7 +62,7 @@ jobs:
             make
             cp unix /genunix
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_458.outcome != 'success'
         run: |
@@ -92,7 +92,7 @@ jobs:
             rm /usr/src/asm.sed*
             rm -r /usr/src/include
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_459.outcome != 'success'
         run: |
@@ -133,7 +133,7 @@ jobs:
             cd /
             patch -p0 < /tmp/src.patch
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_460.outcome != 'success'
         run: |
@@ -167,7 +167,7 @@ jobs:
             make
             cp unix /genunix
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_461.outcome != 'success'
         run: |
@@ -196,7 +196,7 @@ jobs:
             make install
             make clean
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_462.outcome != 'success'
         run: |
@@ -238,7 +238,7 @@ jobs:
             install -c -o bin -g bin -m 444 sysctl.0 /usr/man/cat3
             rm sysctl.0
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_463.outcome != 'success'
         run: |
@@ -268,7 +268,7 @@ jobs:
             make
             cp unix /genunix
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_464.outcome != 'success'
         run: |
@@ -303,7 +303,7 @@ jobs:
             make install
             make clean
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_465.outcome != 'success'
         run: |
@@ -344,7 +344,7 @@ jobs:
             make install
             make clean
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_466.outcome != 'success'
         run: |
@@ -392,7 +392,7 @@ jobs:
             make install
             make clean
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_467.outcome != 'success'
         run: |
@@ -442,7 +442,7 @@ jobs:
             make mdoc.0 mdoc.samples.0
             install -o bin -g bin -m 444 mdoc.0 mdoc.samples.0 /usr/man/cat7
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_468.outcome != 'success'
         run: |
@@ -473,7 +473,7 @@ jobs:
             make install
             make clean
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_469.outcome != 'success'
         run: |
@@ -504,7 +504,7 @@ jobs:
             make scriptinstall
             /usr/sbin/makewhatis
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_470.outcome != 'success'
         run: |
@@ -551,7 +551,7 @@ jobs:
             make
             cp unix /genunix
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_471.outcome != 'success'
         run: |
@@ -582,7 +582,7 @@ jobs:
             /usr/man/manroff at.1 > at.0
             install -o bin -g bin -m 444 at.0 /usr/man/cat1/at.0
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_472.outcome != 'success'
         run: |
@@ -626,7 +626,7 @@ jobs:
             make install
             make clean
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_473.outcome != 'success'
         run: |
@@ -656,7 +656,7 @@ jobs:
             make
             cp unix /genunix
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_474.outcome != 'success'
         run: |
@@ -687,7 +687,7 @@ jobs:
             make
             cp unix /genunix
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_475.outcome != 'success'
         run: |
@@ -720,7 +720,7 @@ jobs:
             make clean
             rm dvhpuboot.s hpuboot.s rm03uboot.s rm05uboot.s si51uboot.s si94uboot.s || true
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_476.outcome != 'success'
         run: |
@@ -745,7 +745,7 @@ jobs:
             cd /
             patch -p0 < /tmp/477.patch
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_477.outcome != 'success'
         run: |
@@ -786,7 +786,7 @@ jobs:
             make install
             make clean
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_478.outcome != 'success'
         run: |
@@ -815,7 +815,7 @@ jobs:
             make install
             make clean
             rm -rf /github
-            (find / -name "*~" | xargs rm) || true
+            (find / -name '*~' -print | xargs rm) || true
 
       - if: steps.built_479.outcome != 'success'
         run: |
