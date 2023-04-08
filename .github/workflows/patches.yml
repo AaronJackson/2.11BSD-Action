@@ -332,3 +332,49 @@ jobs:
         run: |
           gzip ../ci.dsk
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-466.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_467
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-467.dsk.gz
+
+      - name: apply 467
+        if: steps.built_467.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 466
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/467 > /tmp/467.uu
+            cd /tmp
+            uudecode < 467.uu
+            uncompress 467.tar.Z
+            cd /
+            tar xpvf /tmp/467.tar
+            cd /usr/src/bin
+            make ps
+            install -g kmem -m 2751 -s ps /bin/ps
+            install -c -m 755 -o root false.sh /bin/false
+            install -c -m 755 -o root true.sh /bin/true
+            cd /usr/src/games/words
+            make install
+            make clean
+            cd /usr/src/new/rcs/src
+            make merge
+            install -m 775 -o bin -g bin merge /usr/new/merge
+            make clean
+            cd /usr/src/usr.bin
+            install -c -m 555 lorder.sh /usr/bin/lorder
+            install -c -m 555 nohup.sh /usr/bin/nohup
+            cd /usr/src/ucb/tn3270
+            make install
+            make clean
+            cd /usr/src/ucb/top
+            make install
+            make clean
+
+      - if: steps.built_467.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-467.dsk.gz
