@@ -94,3 +94,42 @@ jobs:
         run: |
           gzip ../ci.dsk
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-459.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_460
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-460.dsk.gz
+
+      - name: apply 460
+        if: steps.built_460.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 459
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/460 > /tmp/460.sh
+            cd /tmp
+            sh 460.sh
+            uudecode cpp.tar.Z.uu
+            uncompress cpp.tar.Z
+            cd /
+            patch -p0 < /tmp/ccom.patch
+            cd /usr/src/lib/ccom
+            make
+            make install
+            cd /usr/src/bin
+            make cc
+            install -m 755 -o root -g wheel -s cc /bin
+            cd /
+            tar xf /tmp/cpp.tar
+            cd /usr/src/lib/cpp
+            make
+            make install
+            cd /
+            patch -p0 < /tmp/src.patch
+
+      - if: steps.built_460.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-460.dsk.gz
