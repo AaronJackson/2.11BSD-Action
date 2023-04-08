@@ -657,3 +657,36 @@ jobs:
         run: |
           gzip ../ci.dsk
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-475.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_476
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-476.dsk.gz
+
+      - name: apply 476
+        if: steps.built_476.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 475
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/476 > /tmp/476.patch
+            cd /
+            patch -p0 < /tmp/476.patch
+            cd /usr/src/bin/disklabel
+            make
+            make install
+            make clean
+            cd /usr/src/sys/mdec
+            make
+            make install
+            make clean
+            rm dvhpuboot.s hpuboot.s rm03uboot.s rm05uboot.s si51uboot.s si94uboot.s || true
+
+      - if: steps.built_476.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-476.dsk.gz
+
+
