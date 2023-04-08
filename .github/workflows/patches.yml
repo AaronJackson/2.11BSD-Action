@@ -447,6 +447,7 @@ jobs:
             cd /
             patch -p0 < /tmp/469.patch
             cd /usr/src/share/zoneinfo
+            make
             make install
             make clean
 
@@ -454,3 +455,32 @@ jobs:
         run: |
           gzip ../ci.dsk
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-469.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_470
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-470.dsk.gz
+
+      - name: apply 470
+        if: steps.built_470.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 469
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/470 > /tmp/470.uu
+            cd /tmp
+            uudecode < 470.uu
+            tar xpf 470.tar
+            install -c -m 444 -o bin makewhatis.sed /usr/src/man
+            cd /
+            patch -p0 < /tmp/470.patch
+            cd /usr/src/man
+            make scriptinstall
+            /usr/sbin/makewhatis
+
+      - if: steps.built_470.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-470.dsk.gz
