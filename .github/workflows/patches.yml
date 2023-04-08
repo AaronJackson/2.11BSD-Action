@@ -713,3 +713,42 @@ jobs:
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-477.dsk.gz
 
 
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_478
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-478.dsk.gz
+
+      - name: apply 478
+        if: steps.built_478.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 477
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/478 > /tmp/478.patch
+            cd /
+            patch -p0 < /tmp/478.patch
+            cd /usr/src/games/backgammon
+            make
+            make install
+            make clean
+            cd /usr/src/bin/tcsh
+            make
+            make install
+            make clean
+            cd /usr/src/usr.bin/dc
+            make
+            make install
+            make clean
+            cd /usr/src/new/rcs/src
+            make
+            make install
+            make clean
+
+      - if: steps.built_478.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-478.dsk.gz
+
+
