@@ -14,7 +14,7 @@ inputs:
   patch_level:
     description: 457 to 479
     required: false
-    default: 457
+    default: 479
 
 outputs:
   blank:
