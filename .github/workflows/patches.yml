@@ -56,7 +56,7 @@ jobs:
             make install
             make clean
             cd /sys/SIMH
-            sed 's/CMAPSIZ NPROC/CMAPSIZ 2*NPROC/p' < param.c > param.c2
+            sed 's/#define.CMAPSIZ.NPROC/#define CMAPSIZ 2*NPROC/' < param.c > param.c2
             mv param.c2 param.c
             make
             make install
