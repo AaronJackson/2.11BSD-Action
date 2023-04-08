@@ -206,7 +206,7 @@ jobs:
           path: /github
           patch_level: 462
           run: |
-            sed -e '1,/.*---cut here---.*/ d' < patches/463 > /tmp/463.patch
+            sed -e '1,/.*--- cut here---.*/ d' < patches/463 > /tmp/463.patch
             cd /
             patch -p0 < /tmp/463.patch
             cd /usr/src/ucb/rlogin
@@ -260,3 +260,36 @@ jobs:
         run: |
           gzip ../ci.dsk
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-464.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_465
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-465.dsk.gz
+
+      - name: apply 465
+        if: steps.built_465.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 464
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/465 > /tmp/465.sh
+            cd /tmp
+            sh 465.sh
+            sh top.shar
+            cd /
+            patch -p0 < /tmp/465.patch
+            cd /usr/src/lib/ccom
+            make
+            make install
+            make clean
+            cd /usr/src/ucb/top
+            make
+            make install
+            make clean
+
+      - if: steps.built_465.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-465.dsk.gz
