@@ -690,3 +690,26 @@ jobs:
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-476.dsk.gz
 
 
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_477
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-477.dsk.gz
+
+      - name: apply 477
+        if: steps.built_477.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 476
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/477 > /tmp/477.patch
+            cd /
+            patch -p0 < /tmp/477.patch
+
+      - if: steps.built_477.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-477.dsk.gz
+
+
