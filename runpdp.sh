@@ -64,8 +64,8 @@ EOF
 done <<< "$arg_run"
 
 cat >> pdp.expect <<EOF
-expect "# " {send "sync\n"}
-sleep 2
+checkrun "sync"
+checkrun "sleep 3"
 expect "# " {send "halt\n"}
 
 set timeout 10
