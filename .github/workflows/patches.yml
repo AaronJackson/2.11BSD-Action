@@ -378,3 +378,51 @@ jobs:
         run: |
           gzip ../ci.dsk
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-467.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_468
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-468.dsk.gz
+
+      - name: apply 468
+        if: steps.built_468.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 467
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/468 > /tmp/468.tar.Z.uu
+            cd /tmp
+            uudecode < 468.tar.Z.uu
+            uncompress 468.tar.Z
+            cd /
+            tar xpf /tmp/468.tar
+            cd /usr/src/ucb/more
+            make
+            make install
+            make clean
+            cd /usr/src/share/termcap
+            make
+            make install
+            make clean
+            cd /usr/src/share/tmac
+            make
+            make install
+            make clean
+            rm /usr/share/term/*
+            cd /usr/src/usr.bin/roff
+            make
+            make install
+            make clean
+            cd /usr/src/man/man1
+            make nroff.0
+            install -o bin -g bin -m 444 nroff.0 /usr/man/cat1
+            cd /usr/src/man/man7
+            make mdoc.0 mdoc.samples.0
+            install -o bin -g bin -m 444 mdoc.0 mdoc.samples.0 /usr/man/cat7
+
+      - if: steps.built_468.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-468.dsk.gz
