@@ -1,8 +1,8 @@
 on:
   push:
-    # paths:
-    #   - patches/**
-    #   - .github/workflows/patches.yml
+    paths:
+      - patches/**
+      - .github/workflows/patches.yml
 
 jobs:
   checks:
