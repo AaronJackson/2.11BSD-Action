@@ -530,3 +530,31 @@ jobs:
           gzip ../ci.dsk
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-471.dsk.gz
 
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_472
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-472.dsk.gz
+
+      - name: apply 472
+        if: steps.built_472.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 471
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/472 > /tmp/472.patch
+            cd /
+            patch -p0 < /tmp/472.patch
+            cd /usr/src/usr.bin/at
+            make
+            make install
+            make clean
+            cd /usr/src/man/man1
+            /usr/man/manroff at.1 > at.0
+            install -o bin -g bin -m 444 at.0 /usr/man/cat1/at.0
+
+      - if: steps.built_472.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-472.dsk.gz
