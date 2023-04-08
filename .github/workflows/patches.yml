@@ -600,3 +600,31 @@ jobs:
         run: |
           gzip ../ci.dsk
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-473.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_474
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-474.dsk.gz
+
+      - name: apply 474
+        if: steps.built_474.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 473
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/474 > /tmp/474.patch
+            cd /
+            patch -p0 < /tmp/474.patch
+            cd /sys/SIMH
+            make
+            make install
+            cd /sys/GENERIC
+            make
+            cp unix /genunix
+
+      - if: steps.built_474.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-474.dsk.gz
