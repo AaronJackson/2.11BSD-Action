@@ -1,0 +1,1663 @@
+Subject: size(1) incorrect error message, df(1) output format, top(1) enhancements
+Index:	 src/bin/size.c,df.c src/ucb/top
+
+Description:
+	1) /bin/size prints "not found" if it cannot open a file.  System files
+	   are often execute by all but read/read-write only by root.  size
+	   reports no such file rather than permission denied.
+	
+	2) df lacks the -h option.  This option tells df to print disk sizes in
+           Megabytes as other Unix-like systems do.
+
+	3) Many enhancements have been made to top(1):
+
+		a) Changed to use curses instead of termlib, so that the 
+		   screen isn't fully redrawn all the time.
+		b) Corrected process memory information, which was reported 
+		   in 64-byte units. Now it reports in Kbytes.
+		c) Added ability to sort on different columns.
+		d) Added ability to filter out idle processes.
+		e) Changed to display hostname instead of "top" at top left 
+		   of screen.
+		f) A bit of cleanup and more consistent error handling.
+
+Repeat-By:
+	1) As a non-privileged user:
+
+	ls -l /usr/ucb/ftp
+-rwxr-x--x  1 bin         73060 Feb 10  2003 /usr/ucb/ftp
+
+       /bin/size /usr/ucb/ftp
+       size: /usr/ucb/ftp not found
+
+	The message should be "permission denied".
+
+	2) df -h
+
+df: illegal option -- h
+usage: df [-i] [file | file_system ...]
+
+	3) Observation ;)
+
+	Thanks to bqt@softjar.se, digbyt42@gmail.com and frank@wortner.com
+	for their efforts and contributions.
+
+Fix:
+	To apply this patch cut where indicated and save to a file (/tmp/462).
+
+	Then:
+
+cd /
+patch -p0 < /tmp/462
+
+cd /usr/src/ucb/top
+make 
+make install
+make clean
+
+cd /usr/src/bin
+make df size
+install -s -m 751 -g staff size /bin/size
+install -s -m 2751 -g operator df /bin/df
+make clean
+
+cd /usr/src/man/man1
+make df.0
+install -c -o bin -g bin -m 444 df.0 /usr/man/cat1
+make clean
+
+cd /usr/src/ucb/top
+make
+make install
+make clean
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.update.uu.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+*** ./usr/src/bin/df.c.old	Fri Jan 19 00:03:56 1996
+--- ./usr/src/bin/df.c	Fri Mar 20 07:23:27 2020
+***************
+*** 41,47 ****
+  "@(#) Copyright (c) 1980, 1990, 1993, 1994\n\
+  	The Regents of the University of California.  All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)df.c	8.7.2 (2.11BSD) 1996/1/18";
+  #endif
+  
+  #include <sys/param.h>
+--- 41,47 ----
+  "@(#) Copyright (c) 1980, 1990, 1993, 1994\n\
+  	The Regents of the University of California.  All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)df.c	8.8 (2.11BSD) 2020/3/19";
+  #endif
+  
+  #include <sys/param.h>
+***************
+*** 61,67 ****
+  void	 ufs_df();
+  void	 usage();
+  
+! int	iflag;
+  
+  int
+  main(argc, argv)
+--- 61,67 ----
+  void	 ufs_df();
+  void	 usage();
+  
+! int	iflag, hflag;
+  
+  int
+  main(argc, argv)
+***************
+*** 74,81 ****
+  	int ch, err, i, maxwidth, width;
+  	char *mntpt;
+  
+! 	while ((ch = getopt(argc, argv, "i")) != EOF)
+  		switch (ch) {
+  		case 'i':
+  			iflag = 1;
+  			break;
+--- 74,84 ----
+  	int ch, err, i, maxwidth, width;
+  	char *mntpt;
+  
+! 	while ((ch = getopt(argc, argv, "hi")) != EOF)
+  		switch (ch) {
++ 		case 'h':
++ 			hflag = 1;
++ 			break;
+  		case 'i':
+  			iflag = 1;
+  			break;
+***************
+*** 179,185 ****
+  		maxwidth = 11;
+  	if (++timesthrough == 1) {
+  /*		header = getbsize(&headerlen, &blocksize); */
+! 		header = "1K-blocks";
+  		blocksize = 1024;
+  		headerlen = 9;
+  
+--- 182,192 ----
+  		maxwidth = 11;
+  	if (++timesthrough == 1) {
+  /*		header = getbsize(&headerlen, &blocksize); */
+! 		if (hflag) {
+! 			header = "Megabytes";
+! 		} else {
+! 			header = "1K-blocks";
+! 		}
+  		blocksize = 1024;
+  		headerlen = 9;
+  
+***************
+*** 192,201 ****
+  	(void)printf("%-*.*s", maxwidth, maxwidth, sfsp->f_mntfromname);
+  	used = sfsp->f_blocks - sfsp->f_bfree;
+  	availblks = sfsp->f_bavail + used;
+! 	(void)printf(" %*ld %8ld %8ld", headerlen,
+! 	    fsbtoblk(sfsp->f_blocks, sfsp->f_bsize, blocksize),
+! 	    fsbtoblk(used, sfsp->f_bsize, blocksize),
+! 	    fsbtoblk(sfsp->f_bavail, sfsp->f_bsize, blocksize));
+  	(void)printf(" %5.0f%%",
+  	    availblks == 0 ? 100.0 : (double)used / (double)availblks * 100.0);
+  	if (iflag) {
+--- 199,215 ----
+  	(void)printf("%-*.*s", maxwidth, maxwidth, sfsp->f_mntfromname);
+  	used = sfsp->f_blocks - sfsp->f_bfree;
+  	availblks = sfsp->f_bavail + used;
+! 	if (hflag) {
+! 		(void)printf(" %*.1fM %7.1fM %7.1fM", headerlen-1,
+! 	    	    (double)fsbtoblk(sfsp->f_blocks, sfsp->f_bsize, blocksize)/1024.0,
+! 	    	    (double)fsbtoblk(used, sfsp->f_bsize, blocksize)/1024.0,
+! 	    	    (double)fsbtoblk(sfsp->f_bavail, sfsp->f_bsize, blocksize)/1024.0);
+!         } else {
+! 		(void)printf(" %*ld %8ld %8ld", headerlen,
+! 	    	    fsbtoblk(sfsp->f_blocks, sfsp->f_bsize, blocksize),
+! 	    	    fsbtoblk(used, sfsp->f_bsize, blocksize),
+! 	    	    fsbtoblk(sfsp->f_bavail, sfsp->f_bsize, blocksize));
+! 	}
+  	(void)printf(" %5.0f%%",
+  	    availblks == 0 ? 100.0 : (double)used / (double)availblks * 100.0);
+  	if (iflag) {
+***************
+*** 288,293 ****
+  void
+  usage()
+  {
+! 	(void)fprintf(stderr, "usage: df [-i] [file | file_system ...]\n");
+  	exit(1);
+  }
+--- 302,307 ----
+  void
+  usage()
+  {
+! 	(void)fprintf(stderr, "usage: df [-h] [-i] [file | file_system ...]\n");
+  	exit(1);
+  }
+*** ./usr/src/bin/size.c.old	Mon Jan 10 23:44:05 1994
+--- ./usr/src/bin/size.c	Thu Mar 19 20:44:21 2020
+***************
+*** 1,5 ****
+  #if	defined(DOSCCS) && !defined(lint)
+! static	char *sccsid = "@(#)size.c	4.4.1 (2.11BSD GTE) 1/1/94";
+  #endif
+  
+  /*
+--- 1,5 ----
+  #if	defined(DOSCCS) && !defined(lint)
+! static	char *sccsid = "@(#)size.c	4.5 (2.11BSD) 2020/3/19";
+  #endif
+  
+  /*
+***************
+*** 8,13 ****
+--- 8,15 ----
+  
+  #include	<stdio.h>
+  #include 	<a.out.h>
++ #include	<string.h>
++ #include	<errno.h>
+  
+  int	header;
+  
+***************
+*** 34,40 ****
+  	while(--argc) {
+  		++argv;
+  		if ((f = fopen(*argv, "r"))==NULL) {
+! 			printf("size: %s not found\n", *argv);
+  			err++;
+  			continue;
+  		}
+--- 36,42 ----
+  	while(--argc) {
+  		++argv;
+  		if ((f = fopen(*argv, "r"))==NULL) {
+! 			printf("size: %s: %s\n", *argv, strerror(errno));
+  			err++;
+  			continue;
+  		}
+*** ./usr/src/ucb/top/top.c.old	Mon Mar  9 15:31:03 2020
+--- ./usr/src/ucb/top/top.c	Thu Mar 19 19:12:58 2020
+***************
+*** 18,23 ****
+--- 18,24 ----
+   * 01 05/12/2019 Written                                          DRST
+   * 02 07/03/2020 Removed kmem based nswap access (sysctl updated) DRST
+   * 03 09/03/2020 added BADKEY_IGNORE, delay spec now in seconds   DRST
++  * 04 12/03/2020 Changed to use curses, correct memory size info  bqt
+   *
+   */
+  /*
+***************
+*** 66,72 ****
+  	int	o_sigs;		/* sum of SIGINT & SIGQUIT (2 => ignore both) */
+  	size_t	o_tsize;	/* text size */
+  	int	o_increment;	/* current - last */
+! 	char	o_comm[MAXCOMLEN+1];	/* u_comm */
+  	char	*o_args;	/* best guess at args to process */
+  	long	o_nswap;	/* swaps */
+  	long	o_nvcsw;	/* voluntary context switches */
+--- 67,73 ----
+  	int	o_sigs;		/* sum of SIGINT & SIGQUIT (2 => ignore both) */
+  	size_t	o_tsize;	/* text size */
+  	int	o_increment;	/* current - last */
+! 	char	o_comm[MAXCOMLEN];	/* u_comm */
+  	char	*o_args;	/* best guess at args to process */
+  	long	o_nswap;	/* swaps */
+  	long	o_nvcsw;	/* voluntary context switches */
+***************
+*** 102,107 ****
+--- 103,111 ----
+  LOCAL char		*kmemf	= "/dev/kmem";
+  LOCAL char		*swapf	= "/dev/swap";
+  
++ LOCAL int		sort = 9;
++ LOCAL int		idle = 1;
++ 
+  LOCAL int		kmem;
+  LOCAL int		mem;
+  LOCAL int		swap;
+***************
+*** 120,125 ****
+--- 124,130 ----
+  LOCAL struct utmp	utmp;
+  LOCAL int		nusers;
+  LOCAL double		avenrun[3];
++ LOCAL char		host[10];
+  
+  LOCAL struct  map_s
+  {
+***************
+*** 128,298 ****
+          off_t   b2, e2;
+  	off_t   f2;
+  } datmap;
+- /*
+-  * Screen Management
+-  */
+- LOCAL struct winsize	win;
+- LOCAL int 		lines, columns;
+- LOCAL char		*CMOV;      /* Cursor Movement */
+- LOCAL char		*CLEARSCR;  /* Clear Screen */
+- LOCAL char		*US;        /* Start underscore mode */
+- LOCAL char		*UE;        /* End underscore mode */
+  
+- LOCAL char      	*UP;         /* Upline (cursor up) */
+- LOCAL char      	*BC;         /* Backspace if not ^H */
+- LOCAL char		*VE;         /* cursor normal */
+- LOCAL char		*VI;         /* cursor invisible */
+- 
+- LOCAL short  		ospeed;         /* output speed */
+- LOCAL char       	PC_;        /* Pad Character */
+- 
+- #if TTY_RAW
+- LOCAL char		NewLine[] = "\r\n";
+- #else
+- LOCAL char		NewLine[] = "\n";
+- #endif
+- char        *tgetstr();
+- char        *tgoto();
+  /*
+-  * write character routine for tputs
+-  */
+- static void ttout(c)
+- char	c;
+- {
+-     putchar(c);
+- }
+- 
+- LOCAL int error(s)
+- char *s;
+- {
+- 	fprintf(stderr, "error - %s%s", s, NewLine);
+- 	return(-1);
+- }
+- 
+- 
+- static int ttcom(c)
+- char c;
+- {
+-     ttout(c);
+- }
+- 
+- #if 1
+- static void dial(dline,dcol)
+- int dline, dcol;
+- {
+-     static      int odline, odcol;
+-     char        *sptr;
+- 
+-     if(odline == dline && odcol == (dcol-1))
+-     {
+-         odcol++;
+-         return;
+-     }
+-     if((odline == (dline-1)) && dcol == 0)
+-         ttout('\n');
+-     else 
+-     {
+-         sptr = tgoto(CMOV, dcol % columns, dline % lines);
+-         tputs(sptr, 1, ttcom);
+-     }
+-     odline = dline;
+-     odcol = dcol;
+- }
+- #endif
+- static int tcinit()
+- {
+-     char        bp[1024];
+-     static char capbuff[100];
+-     char        *buffp = capbuff;
+- 
+-     if(tgetent(bp, (char *)getenv("TERM")) != 1)
+-         return(error("no termcap entry"));
+- #if 0	/* dont seem to have this?? */
+-     VE = buffp;
+-     if(tgetstr("ve", &buffp) == NULL)
+- 	return(error("no cursor normal entry"));
+-     VI = buffp;
+-     if(tgetstr("vi", &buffp) == NULL)
+- 	return(error("no cursor invisible entry"));
+- #endif
+-     CLEARSCR = buffp;
+-     if(tgetstr("cl", &buffp) == NULL)
+-         return(error("no \"cl\" capability"));
+-     CMOV = buffp;
+-     if(tgetstr("cm", &buffp) == NULL)
+-         return(error("no \"cl\" capability"));
+- 
+-     US = buffp;
+-     if((tgetstr("so",&buffp)==NULL)&&(tgetstr("us",&buffp)==NULL))
+-        return(error("no hi-light (\"so\" or \"us\") capabilty"));
+-     UE = buffp;
+-     if((tgetstr("se",&buffp)==NULL)&&(tgetstr("ue",&buffp)==NULL))
+-         return(error("No end highlight\n"));
+-     UP = tgetstr("up", &buffp);
+-     BC = tgetstr("bc", &buffp);
+- #ifdef PAD
+- /* set up padding characters */
+-     if( tgetflag("pc") == 1)
+-     {
+-         tgetstr("pc", &buffp);
+-         PC = *--buffp;
+-     }
+-     gtty(1, &ttybuff);
+-     ospeed = ttybuff.sg_ospeed;
+- #endif /* PAD */
+- #if 0	/* now using ioctl */
+-     if(lines == 0)
+-         lines = tgetnum("li");
+-     if(columns == 0)
+-         columns = tgetnum("co");
+- #endif
+- }
+- 
+- /*
+   * Configure/restore output terminal
+   */
+! LOCAL int config_tty(onoff, lp, cp)
+  int	onoff;
+- int	*lp;
+- int	*cp;
+  {
+! 	static struct sgttyb	smode;	/* saved/original mode */
+! 	struct sgttyb		nmode;	/* new mode */
+! 	struct winsize		win;
+! 
+! 	if(onoff == 0)
+! 	{
+! 		dial(lines-1, 0);
+! 		printf("\n");
+! 		ioctl(0, TIOCSETP, &smode);
+! 		return(0);
+  	}
+- 
+- 	if(ioctl(1, TIOCGWINSZ, &win) < 0)
+- 	{
+- 		perror("ioctl");
+- 		return(-1);
+- 	}
+- 	*lp = win.ws_row;
+- 	*cp = win.ws_col;
+- 
+- 	if(ioctl(0, TIOCGETC, &tc) < 0)
+- 	{
+- 		perror("TIOGETC");
+- 		return(-1);
+- 	}
+- 	if(ioctl(0, TIOCGETP, &smode) < 0)
+- 		return(-1);
+- 	nmode = smode;
+- #if TTY_RAW
+- 	/* using raw mode eliminates the need for signal handling */
+- 	nmode.sg_flags |= RAW;
+- #else
+- 	nmode.sg_flags |= CBREAK;
+- #endif
+- 	nmode.sg_flags &= ~ECHO;
+- 	if(ioctl(0, TIOCSETP, &nmode) < 0)
+- 		return(-1);
+  	return(0);
+  }
+  
+--- 133,153 ----
+          off_t   b2, e2;
+  	off_t   f2;
+  } datmap;
+  
+  /*
+   * Configure/restore output terminal
+   */
+! LOCAL int config_tty(onoff)
+  int	onoff;
+  {
+! 	if(onoff == 0) {
+! 		resetty();
+! 	} else {
+! 		initscr();
+! 		savetty();
+! 		raw();
+! 		noecho();
+  	}
+  	return(0);
+  }
+  
+***************
+*** 565,572 ****
+  	datmap.b2	= stackbas(stksiz);
+  	datmap.e2	= stacktop(stksiz);
+  	tp		= gettty(up->u_ttyp, up->u_ttyd);
+! 	strncpy(a->o_tty, tp, sizeof (a->o_tty));
+  	a->o_ttyd	= tp[0] == '?' ?  -1 : up->u_ttyd;
+  	if(procp->p_stat == SZOMB)
+  		return(1);
+  
+--- 420,443 ----
+  	datmap.b2	= stackbas(stksiz);
+  	datmap.e2	= stacktop(stksiz);
+  	tp		= gettty(up->u_ttyp, up->u_ttyd);
+! 	strncpy(a->o_tty, tp, sizeof (a->o_tty)-1);
+! 	a->o_tty[sizeof(a->o_tty)-1] = 0;
+  	a->o_ttyd	= tp[0] == '?' ?  -1 : up->u_ttyd;
++ 
++ 	a->o_tsize	= 0;
++ 	a->o_utime	= 0;
++ 	a->o_stime	= 0;
++ 	a->o_nswap	= 0;
++ 	a->o_nvcsw	= 0;
++ 	a->o_nicsw	= 0;
++ 	a->o_cutime	= 0;
++ 	a->o_cstime	= 0;
++ 	a->o_ttime	= 0;
++ 	a->o_sigs	= 0;
++ 	a->o_dtime	= 0;
++ 	a->o_uname	= NULL;
++ 	a->o_comm[0]	= 0;
++ 
+  	if(procp->p_stat == SZOMB)
+  		return(1);
+  
+***************
+*** 585,591 ****
+  	else
+  		a->o_dtime = a->o_ttime;
+  
+- 	a->o_uname	= NULL;
+  	for(i = 0; i < MAXUSER; i++)
+  	{
+  		if(untab[i].uname[0] == 0)
+--- 456,461 ----
+***************
+*** 603,609 ****
+  			a->o_uname = untab[i].uname;	
+  	}
+  
+! 	strncpy(a->o_comm, up->u_comm, MAXCOMLEN);
+  
+  	if(noargs)
+  		return(1);
+--- 473,480 ----
+  			a->o_uname = untab[i].uname;	
+  	}
+  
+! 	strncpy(a->o_comm, up->u_comm, MAXCOMLEN-1);
+! 	a->o_comm[MAXCOMLEN-1] = 0;
+  
+  	if(noargs)
+  		return(1);
+***************
+*** 615,631 ****
+  LOCAL int sortcmp(i1, i2)
+  register int *i1, *i2;
+  {
+! 	time_t 	usage1, usage2;
+  
+! 	usage1 = userdata[*i1].o_dtime;
+! 	usage2 = userdata[*i2].o_dtime;
+! 	if(usage1 != usage2)
+! 		return((usage2>usage1)? 1:-1);
+! 	usage1 = userdata[*i1].o_ttime;
+! 	usage2 = userdata[*i2].o_ttime;
+! 	if(usage1 != usage2)
+! 		return((usage2>usage1)? 1:-1);
+! 	return(0);
+  }
+  /*
+   * Update the process list
+--- 486,528 ----
+  LOCAL int sortcmp(i1, i2)
+  register int *i1, *i2;
+  {
+! 	struct proc *p1, *p2;
+! 	struct udata_s *u1, *u2;
+  
+! 	p1 = &proctab[*i1];
+! 	p2 = &proctab[*i2];
+! 	u1 = &userdata[*i1];
+! 	u2 = &userdata[*i2];
+! 
+! 	switch (sort) {
+! 	case 0:
+! 		return p1->p_pid - p2->p_pid;
+! 	case 1:
+! 		return strcmp(u1->o_uname, u2->o_uname);
+! 	case 2:
+! 		return p2->p_pri - p1->p_pri;
+! 	case 3:
+! 		return p1->p_nice - p2->p_nice;
+! 	case 4:
+! 		return u2->o_tsize - u1->o_tsize;
+! 	case 5:
+! 		return p2->p_dsize - p1->p_dsize;
+! 	case 6:
+! 		return p2->p_ssize - p1->p_ssize;
+! 	case 7:
+! 		return p1->p_stat - p2->p_stat;
+! 	case 9:
+! 		{
+! 			time_t t;
+! 			t = u2->o_dtime - u1->o_dtime;
+! 			if (t) return t;
+! 		}
+! 	case 8:
+! 		return u2->o_ttime - u1->o_ttime;
+! 	case 10:
+! 		return strcmp(u1->o_comm, u2->o_comm);
+! 	}
+! 	return 0;
+  }
+  /*
+   * Update the process list
+***************
+*** 654,661 ****
+  	/* read the current proc table into buffer */
+  	if(readat(kmem, (off_t) proc_sym, proctab, ptsz) < 0)
+  	{
+! 		fprintf(stderr, "Error reading process table\n");
+! 		return(1);
+  	}
+  
+  	for(np = i = 0; i < nproc; i++)
+--- 551,558 ----
+  	/* read the current proc table into buffer */
+  	if(readat(kmem, (off_t) proc_sym, proctab, ptsz) < 0)
+  	{
+! 		fprintf(stderr, "Error reading process table\r\n");
+! 		return(-1);
+  	}
+  
+  	for(np = i = 0; i < nproc; i++)
+***************
+*** 667,675 ****
+  
+  		if(getu(procp, &userdata[i], 1) == 0)
+  		{
+! 			fprintf(stderr, "Error getting process %d uinf\n",
+  				procp->p_pid);
+! 			continue;
+  		}
+  		procidx[np] = i;
+  		np++;
+--- 564,572 ----
+  
+  		if(getu(procp, &userdata[i], 1) == 0)
+  		{
+! 			fprintf(stderr, "Error getting process %d uinf\r\n",
+  				procp->p_pid);
+! 			return(-1);
+  		}
+  		procidx[np] = i;
+  		np++;
+***************
+*** 679,696 ****
+  
+  LOCAL char states[] = { '?', 'S', 'W', 'R', 'I', 'Z', 'T' };
+  
+- LOCAL void printw(w, s)
+- int	w;
+- char	*s;
+- {
+- 	while(w-- > 0)
+- 	{
+- 		char c = ' ';
+- 		if(*s)
+- 			c = *s++;
+- 		putchar(c);
+- 	}
+- }
+  /*
+   * Get Memory Statistics for summary lines
+   * Returns:
+--- 576,581 ----
+***************
+*** 718,725 ****
+  		size = sizeof(physmem);
+  		if(sysctl(mib, 2, &physmem, &size, NULL, 0) == -1)
+  		{
+! 			perror("PHYSMEM");
+! 			printf("\n");
+  			return(-1);
+  		}
+  		mib[0] = CTL_VM;
+--- 603,609 ----
+  		size = sizeof(physmem);
+  		if(sysctl(mib, 2, &physmem, &size, NULL, 0) == -1)
+  		{
+! 			printw("PHYSMEM: %s\n\n", strerror(errno));
+  			return(-1);
+  		}
+  		mib[0] = CTL_VM;
+***************
+*** 726,739 ****
+  		mib[1] = VM_COREMAP;
+  		if(sysctl(mib, 2, NULL, &cmsz, NULL, 0) == -1)
+  		{
+! 			perror("COREMAP");
+! 			printf("\n");
+  			return(-1);
+  		}
+  		if((coremap = (char *)malloc((unsigned)cmsz)) == NULL)
+  		{
+  			perror("COREMAP");
+! 			printf("\n");
+  			exit(1);
+  		}
+  		memset(coremap, 0, cmsz);
+--- 610,622 ----
+  		mib[1] = VM_COREMAP;
+  		if(sysctl(mib, 2, NULL, &cmsz, NULL, 0) == -1)
+  		{
+! 			printw("COREMAP: %s\n\n", strerror(errno));
+  			return(-1);
+  		}
+  		if((coremap = (char *)malloc((unsigned)cmsz)) == NULL)
+  		{
+  			perror("COREMAP");
+! 			printf("\r\n");
+  			exit(1);
+  		}
+  		memset(coremap, 0, cmsz);
+***************
+*** 743,750 ****
+  	size = cmsz;
+  	if(sysctl(mib, 2, coremap, &size, NULL, 0) == -1)
+  	{
+! 		perror("COREMAP2");
+! 		printf("\n");
+  		return(-1);
+  	}
+  	
+--- 626,632 ----
+  	size = cmsz;
+  	if(sysctl(mib, 2, coremap, &size, NULL, 0) == -1)
+  	{
+! 		printw("COREMAP2: %s\n\n", strerror(errno));
+  		return(-1);
+  	}
+  	
+***************
+*** 784,791 ****
+  		size = sizeof(i);
+  		if(sysctl(mib, 2, &i, &size, NULL, 0) == -1)
+  		{
+! 			perror("NSWAP");
+! 			printf("\n");
+  			return(-1);
+  		}
+  		nswap = i;
+--- 666,672 ----
+  		size = sizeof(i);
+  		if(sysctl(mib, 2, &i, &size, NULL, 0) == -1)
+  		{
+! 			printw("NSWAP: %s\n\n", strerror(errno));
+  			return(-1);
+  		}
+  		nswap = i;
+***************
+*** 793,806 ****
+  		mib[1] = VM_SWAPMAP;
+  		if(sysctl(mib, 2, NULL, &smsz, NULL, 0) == -1)
+  		{
+! 			perror("SWAPMAP");
+! 			printf("\n");
+  			return(-1);
+  		}
+  		if((swapmap = (char *)malloc((unsigned)smsz)) == NULL)
+  		{
+  			perror("SWAPMAP");
+! 			printf("\n");
+  			exit(1);
+  		}
+  		memset(swapmap, 0, smsz);
+--- 674,686 ----
+  		mib[1] = VM_SWAPMAP;
+  		if(sysctl(mib, 2, NULL, &smsz, NULL, 0) == -1)
+  		{
+! 			printw("SWAPMAP: %s\n\n", strerror(errno));
+  			return(-1);
+  		}
+  		if((swapmap = (char *)malloc((unsigned)smsz)) == NULL)
+  		{
+  			perror("SWAPMAP");
+! 			printf("\r\n");
+  			exit(1);
+  		}
+  		memset(swapmap, 0, smsz);
+***************
+*** 810,817 ****
+  	size = smsz;
+  	if(sysctl(mib, 2, swapmap, &size, NULL, 0) == -1)
+  	{
+! 		perror("SWAPMAP2");
+! 		printf("\n");
+  		return(-1);
+  	}
+  	
+--- 690,696 ----
+  	size = smsz;
+  	if(sysctl(mib, 2, swapmap, &size, NULL, 0) == -1)
+  	{
+! 		printw("SWAPMAP2: %s\n\n", strerror(errno));
+  		return(-1);
+  	}
+  	
+***************
+*** 840,846 ****
+  	/* get time */
+  	time(&now);
+  	ltp = localtime(&now);
+! 	printf("top - %02d:%02d:%02d", ltp->tm_hour, ltp->tm_min, ltp->tm_sec);
+  
+  	/* get uptime */
+  
+--- 719,725 ----
+  	/* get time */
+  	time(&now);
+  	ltp = localtime(&now);
+! 	printw("%s - %02d:%02d:%02d", host, ltp->tm_hour, ltp->tm_min, ltp->tm_sec);
+  
+  	/* get uptime */
+  
+***************
+*** 859,866 ****
+  		uptime %= (60L*60L);
+  		mins = DIV60(uptime);
+  
+! 		printf(" up %2d day%s", days, days != 1?"s":"");
+! 		printf(", %2d:%02d", hrs, mins);
+  	}
+  
+  	/* get user count */
+--- 738,745 ----
+  		uptime %= (60L*60L);
+  		mins = DIV60(uptime);
+  
+! 		printw(" up %2d day%s", days, days != 1?"s":"");
+! 		printw(", %2d:%02d", hrs, mins);
+  	}
+  
+  	/* get user count */
+***************
+*** 870,892 ****
+  		if(utmp.ut_name[0] != '\0')
+  			nusers++;
+  	rewind(ut);
+! 	printf(", %3d user%c", nusers, nusers > 1? 's': '\0');
+  
+  	/* load average */
+  	if(getloadavg(avenrun, sizeof(avenrun)/sizeof(avenrun[0])) == -1)
+! 		printf(", no load average information available");
+  	else
+  	{
+  		int	i;
+! 		printf(",  load average:");
+  		for(i = 0; i < (sizeof(avenrun)/sizeof(avenrun[0])); i++)
+  		{
+  			if(i > 0)
+! 				printf(",");
+! 			printf(" %.2f", avenrun[i]);
+  		}
+  	}
+! 	printf(NewLine);
+  	/* process status summary */
+  	run = sleep = stop = zombie = 0;
+  	for(i = 0; i < npr; i++)
+--- 749,771 ----
+  		if(utmp.ut_name[0] != '\0')
+  			nusers++;
+  	rewind(ut);
+! 	printw(", %3d user%c", nusers, nusers > 1? 's': '\0');
+  
+  	/* load average */
+  	if(getloadavg(avenrun, sizeof(avenrun)/sizeof(avenrun[0])) == -1)
+! 		printw(", no load average information available");
+  	else
+  	{
+  		int	i;
+! 		printw(",  load average:");
+  		for(i = 0; i < (sizeof(avenrun)/sizeof(avenrun[0])); i++)
+  		{
+  			if(i > 0)
+! 				printw(",");
+! 			printw(" %.2f", avenrun[i]);
+  		}
+  	}
+! 	printw("\n");
+  	/* process status summary */
+  	run = sleep = stop = zombie = 0;
+  	for(i = 0; i < npr; i++)
+***************
+*** 905,915 ****
+  				zombie++; /* shouldn't happen */
+  		}
+  	}
+! 	printf("Tasks:%4d total, %3d running,", npr, run);
+! 	printf(" %4d sleeping, %3d stopped, %3d zombie",
+  		sleep, stop, zombie);
+- 	printf(NewLine);
+  
+  	/* Memory and Swap status */
+  
+  	if(GetMemStats(&memsize, &memfree) < 0)
+--- 784,795 ----
+  				zombie++; /* shouldn't happen */
+  		}
+  	}
+! 	printw("Tasks:%4d total, %3d running,", npr, run);
+! 	printw(" %4d sleeping, %3d stopped, %3d zombie\n",
+  		sleep, stop, zombie);
+  
++ 	/* Cpu states */
++ 
+  	/* Memory and Swap status */
+  
+  	if(GetMemStats(&memsize, &memfree) < 0)
+***************
+*** 916,929 ****
+  		return;
+  	if(GetSwapStats(&swapsize, &swapfree) < 0)
+  		return;
+! 	/* 2.11 BSD has static buffer cache so no need to display this */	
+! 	printf("    Mem : %8ld total, %8ld free, %8ld used (%2ld%%)%s",
+! 		memsize, memfree, memsize-memfree,
+! 		(memsize-memfree)*100L/memsize, NewLine);
+! 	printf("    Swap: %8ld total, %8ld free, %8ld used (%2ld%%)%s", 
+! 		swapsize, swapfree, swapsize-swapfree,
+! 		(swapsize-swapfree)*100L/swapsize, NewLine);
+  }
+  /*
+   * show heading information
+   */
+--- 796,810 ----
+  		return;
+  	if(GetSwapStats(&swapsize, &swapfree) < 0)
+  		return;
+! 	/* 2.11 BSD has static buffer cache so no need to display this */
+! 	printw("    Mem : %7.1fK total, %7.1fK free, %7.1fK used (%2ld%%)\n",
+! 		memsize/1024.0, memfree/1024.0, (memsize-memfree)/1024.0,
+! 		(memsize-memfree)*100L/memsize);
+! 	printw("    Swap: %7.1fK total, %7.1fK free, %7.1fK used (%2ld%%)\n",
+! 		swapsize/1024.0, swapfree/1024.0, (swapsize-swapfree)/1024.0,
+! 		(swapsize-swapfree)*100L/swapsize);
+  }
++ 
+  /*
+   * show heading information
+   */
+***************
+*** 930,938 ****
+  LOCAL void
+  show_titles()
+  {
+! 	tputs(US, 1, ttcom);
+! 	printw(columns, "  PID USER      PR  NI  TEXT  DATA STACK S     TIME   DTIME COMMAND");
+! 	tputs(UE, 1, ttcom);
+  }
+  
+  LOCAL void
+--- 811,819 ----
+  LOCAL void
+  show_titles()
+  {
+! 	standout();
+! 	printw("  PID USER      PR  NI  TEXT  DATA STACK S     TIME   DTIME COMMAND \n");
+! 	standend();
+  }
+  
+  LOCAL void
+***************
+*** 950,991 ****
+  	{
+  		register struct proc	*p = &proctab[procidx[i]];
+  		register struct udata_s	*a = &userdata[procidx[i]];
+- 		
+- 		printf("%5d ",	p->p_pid);
+- 		if(a->o_uname != NULL)
+- 			printf("%-7s", a->o_uname);
+- 		else
+- 			printf("%7d", p->p_uid);
+- 		printf("%5d",	p->p_pri);
+- 		printf("%4d",	p->p_nice);
+- 		printf("%6d", 	a->o_tsize);
+- 		printf("%6d", 	p->p_dsize);
+- 		printf("%6d", 	p->p_ssize);
+- 		printf(" %c",   (p->p_stat>6)? '?' : states[p->p_stat]);
+- 		printf("%c", 	(p->p_flag & SLOAD)? ' ':'s');
+  
+  #if 1
+! 		printf("%8.2f ", a->o_ttime/fhz);
+! 		printf("%7.2f ", a->o_dtime/fhz);
+  #else
+! 		printf("%8ld ", a->o_ttime);
+! 		printf("%7ld ", a->o_dtime);
+  #endif
+  #if 0
+! 		printf(" %2d %2d %2d ", a->o_nswap, a->o_nvcsw, a->o_nicsw);
+! 		printf(" %4d %1d ", a->o_LastPid, a->o_LastStat);
+  #endif
+! 		if((a->o_comm[0] == 0)&&(p->p_pid == 0))
+! 			printf("%-19s",    "swapper");
+! 		else
+! 			printf("%-19s",    a->o_comm);
+  #if 1
+! 		if(i >= (max-1))
+! 			break;
+  #endif
+! 		printf("%s", NewLine);
+  	}
+  }
+  /*
+   * Wait for a key press on stdin, signal  or until tout microseconds
+   * have elapsed
+--- 831,876 ----
+  	{
+  		register struct proc	*p = &proctab[procidx[i]];
+  		register struct udata_s	*a = &userdata[procidx[i]];
+  
++ 		if (idle || a->o_dtime || p->p_stat == SRUN)
++ 		{
++ 			printw("%5d ",	p->p_pid);
++ 			if(a->o_uname != NULL)
++ 				printw("%-7s", a->o_uname);
++ 			else
++ 				printw("%7d", p->p_uid);
++ 			printw("%5d",	p->p_pri);
++ 			printw("%4d",	p->p_nice);
++ 			printw("%5.1fK", (ctob(a->o_tsize))/1024.0);
++ 			printw("%5.1fK", (ctob(p->p_dsize))/1024.0);
++ 			printw("%5.1fK", (ctob(p->p_ssize))/1024.0);
++ 			printw(" %c",   (p->p_stat>6)? '?' : states[p->p_stat]);
++ 			printw("%c", 	(p->p_flag & SLOAD)? ' ':'s');
++ 
+  #if 1
+! 			printw("%8.2f ", a->o_ttime/fhz);
+! 			printw("%7.2f ", a->o_dtime/fhz);
+  #else
+! 			printw("%8ld ", a->o_ttime);
+! 			printw("%7ld ", a->o_dtime);
+  #endif
+  #if 0
+! 			printw(" %2d %2d %2d ", a->o_nswap, a->o_nvcsw, a->o_nicsw);
+! 			printw(" %4d %1d ", a->o_LastPid, a->o_LastStat);
+  #endif
+! 			if((a->o_comm[0] == 0)&&(p->p_pid == 0))
+! 				printw("%-19s",    "[swapper]");
+! 			else
+! 				printw("%-19s",    a->o_comm);
+  #if 1
+! 			if(i >= (max-1))
+! 				break;
+  #endif
+! 			printw("%s", "\n");
+! 		}
+  	}
+  }
++ 
+  /*
+   * Wait for a key press on stdin, signal  or until tout microseconds
+   * have elapsed
+***************
+*** 1016,1021 ****
+--- 901,907 ----
+  	}
+  	return(0);
+  }
++ 
+  /*
+   * Convert and return a ms value formatted s[.d[d[d]]]
+   * returns delay on success
+***************
+*** 1068,1078 ****
+  	static char	lbuff[50];
+  	char		*lp = lbuff;
+  
+! 	while(read(0, &c, 1) == 1)
+  	{
+  		if(c == '\n')
+  		{
+  			*lp = 0;
+  			return(lbuff);
+  		}
+  		if(c == 0x7f)
+--- 954,968 ----
+  	static char	lbuff[50];
+  	char		*lp = lbuff;
+  
+! 	noraw();
+! 	echo();
+! 	while((c = getch()) >= 0)
+  	{
+  		if(c == '\n')
+  		{
+  			*lp = 0;
++ 			noecho();
++ 			raw();
+  			return(lbuff);
+  		}
+  		if(c == 0x7f)
+***************
+*** 1080,1098 ****
+  			if(lp == &lbuff[0])
+  				continue;
+  			--lp;
+! 			write(1, "\b \b", 3);
+  			continue;
+  		}
+- #if 1
+- 		write(1, &c, 1);
+- #else
+- 		printf("%02x", c);
+- 		fflush(stdout);
+- #endif
+  		*lp++ = c;
+  		if(lp == &lbuff[sizeof(lbuff)-2])
+! 			return(NULL);
+  	}
+  	return(NULL);
+  }
+  
+--- 970,986 ----
+  			if(lp == &lbuff[0])
+  				continue;
+  			--lp;
+! 			printw("\b");
+! 			clrtoeol();
+! 			refresh();
+  			continue;
+  		}
+  		*lp++ = c;
+  		if(lp == &lbuff[sizeof(lbuff)-2])
+! 			break;
+  	}
++ 	noecho();
++ 	raw();
+  	return(NULL);
+  }
+  
+***************
+*** 1132,1138 ****
+  
+          if(getksyms("/unix") < 0)
+  	{
+! 		fprintf(stderr, "Can't read kernel symbols - aborting\n");
+  		return(1);
+  	}
+  
+--- 1020,1026 ----
+  
+          if(getksyms("/unix") < 0)
+  	{
+! 		fprintf(stderr, "Can't read kernel symbols - aborting\r\n");
+  		return(1);
+  	}
+  
+***************
+*** 1140,1146 ****
+  
+  	if(nproc_sym == 0)
+  	{
+! 		fputs("nproc not in namelist\n",stderr);
+  		return(-1);
+  	}
+  
+--- 1028,1034 ----
+  
+  	if(nproc_sym == 0)
+  	{
+! 		fprintf(stderr, "nproc not in namelist\r\n");
+  		return(-1);
+  	}
+  
+***************
+*** 1164,1170 ****
+  
+  	if((proctab = (struct proc *)malloc(ptsz))==NULL)
+  	{
+! 		fputs("top: not enough memory for proc table\n",stderr);
+  		exit(1);
+  	}
+  	/*
+--- 1052,1058 ----
+  
+  	if((proctab = (struct proc *)malloc(ptsz))==NULL)
+  	{
+! 		fprintf(stderr, "top: not enough memory for proc table\r\n");
+  		exit(1);
+  	}
+  	/*
+***************
+*** 1172,1178 ****
+  	 */
+  	if((userdata=(struct udata_s *)calloc(nproc, sizeof(struct udata_s)))==NULL)
+  	{
+! 		fprintf(stdout, "top: can't allocate %d bytes for saving info\n", nproc*sizeof(struct udata_s));
+  		exit(1);
+  	}
+  	/*
+--- 1060,1066 ----
+  	 */
+  	if((userdata=(struct udata_s *)calloc(nproc, sizeof(struct udata_s)))==NULL)
+  	{
+! 		fprintf(stderr, "top: can't allocate %d bytes for saving info\r\n", nproc*sizeof(struct udata_s));
+  		exit(1);
+  	}
+  	/*
+***************
+*** 1180,1193 ****
+  	 */
+  	if( (procidx = (int *) malloc(nproc*sizeof(short))) == NULL)
+  	{
+! 		fputs("top: cant allocate index table\n", stderr);
+  		return(1);
+  	}
+  	if((npr = update()) < 0)
+  		return(1);
+! 	tputs(CLEARSCR, 1, ttcom);
+!  	dial(STATLINES, 0);
+! 	show_titles();
+  	if((ut = fopen(_PATH_UTMP, "r")) == NULL)
+  	{
+  		perror(_PATH_UTMP);
+--- 1068,1079 ----
+  	 */
+  	if( (procidx = (int *) malloc(nproc*sizeof(short))) == NULL)
+  	{
+! 		fprintf(stderr, "top: cant allocate index table\r\n");
+  		return(1);
+  	}
+  	if((npr = update()) < 0)
+  		return(1);
+! 
+  	if((ut = fopen(_PATH_UTMP, "r")) == NULL)
+  	{
+  		perror(_PATH_UTMP);
+***************
+*** 1201,1220 ****
+  		if(c != 0)
+  		{
+  			if(c == 'q')
+  				return(0);
+  			if(c == 's')
+  			{
+  				char	*s;
+  
+! 				dial(STATLINES-1,0);
+! 				fprintf(stdout, "Change delay from %4.3f to ",
+  					(upd_us *1.0)/1000000);
+! 				fflush(stdout);
+  				s = ReadLine();
+! 				dial(STATLINES-1,0);
+! 				fprintf(stdout, "%40s", "");
+! 				fflush(stdout);
+! 				if(s != NULL)
+  				{
+  					long newdelay;
+  
+--- 1087,1118 ----
+  		if(c != 0)
+  		{
+  			if(c == 'q')
++ 			{
++ 				move(LINES-1,0);
++ 				clrtoeol();
++ 				refresh();
++ 				endwin();
+  				return(0);
++ 			}
++ 
+  			if(c == 's')
+  			{
+  				char	*s;
+  
+! 				move(STATLINES-1,0);
+! 				printw("Change delay from %4.3f to ",
+  					(upd_us *1.0)/1000000);
+! 				clrtoeol();
+! 				refresh();
+! 
+  				s = ReadLine();
+! 
+! 				move(STATLINES-1,0);
+! 				clrtoeol();
+! 				move(0,0);
+! 				refresh();
+! 
+! 				if (s)
+  				{
+  					long newdelay;
+  
+***************
+*** 1221,1247 ****
+  					if((newdelay = GetDelay(s)) > 0)
+  					{
+  						upd_us = newdelay;
+- 						dial(lines-1, 0);
+- 						fflush(stdout);
+  						continue;
+  					}
+  					if(*s == 0)
+  						continue;
+  				}
+! 				dial(STATLINES-1,0);
+! 				fprintf(stdout, "Unacceptable delay: %s", s);
+! 				fflush(stdout);
+  				sleep(1);
+- 				dial(STATLINES-1,0);
+- 				fprintf(stdout, "%40s", "");
+- 				dial(lines-1, 0);
+- 				fflush(stdout);
+  				continue;
+  			}
+  #if !BADKEY_IGNORE
+  
+! 			dial(lines-1,0);
+! 			fprintf(stdout, "\nUnexpected command: '%c'", c);
+  			return(0);
+  /* otherwise invalid key commands just force an update */
+  #endif
+--- 1119,1183 ----
+  					if((newdelay = GetDelay(s)) > 0)
+  					{
+  						upd_us = newdelay;
+  						continue;
+  					}
+  					if(*s == 0)
+  						continue;
+  				}
+! 
+! 				move(STATLINES-1,0);
+! 				printw("Unacceptable delay: %s", s);
+! 				move(0,0);
+! 				refresh();
+  				sleep(1);
+  				continue;
+  			}
++ 
++ 			if(c == 'o')
++ 			{
++ 				char	*s;
++ 
++ 				move(STATLINES-1,0);
++ 				printw("Order: ");
++ 				clrtoeol();
++ 				refresh();
++ 
++ 				s = ReadLine();
++ 
++ 				move(STATLINES-1,0);
++ 				clrtoeol();
++ 				move(0,0);
++ 				refresh();
++ 
++ 				if (s)
++ 				{
++ 					int newsort;
++ 
++ 					newsort = atoi(s);
++ 					if ((newsort >= 0) && (newsort <= 10))
++ 					{
++ 						sort = newsort;
++ 					}
++ 					else
++ 					{
++ 						move(STATLINES-1,0);
++ 						printw("Bad order");
++ 						move(0,0);
++ 						refresh();
++ 						sleep(1);
++ 					}
++ 				}
++ 			}
++ 
++ 			if (c == 'I')
++ 			{
++ 				idle = 1-idle;
++ 			}
+  #if !BADKEY_IGNORE
+  
+! 			move(LINES-1,0);
+! 			printw("\nUnexpected command: '%c'", c);
+! 			refresh();
+  			return(0);
+  /* otherwise invalid key commands just force an update */
+  #endif
+***************
+*** 1248,1258 ****
+  		}
+  		if((npr = update()) < 0)
+  			return(1);
+! 		dial(0,0);
+  		show_stats(npr);
+! 		dial(STATLINES+1,0);
+! 		show_procs(npr, lines-(STATLINES+1));
+! 		fflush(stdout);
+  	}
+  }
+  
+--- 1184,1198 ----
+  		}
+  		if((npr = update()) < 0)
+  			return(1);
+! 
+! 		erase();
+! 		move(0,0);
+  		show_stats(npr);
+! 		printw("\n");
+! 		show_titles();
+! 		show_procs(npr, LINES-(STATLINES+1));
+! 		move(0,0);
+! 		refresh();
+  	}
+  }
+  
+***************
+*** 1272,1277 ****
+--- 1212,1219 ----
+  	fprintf(stderr, "Where options are\n");
+  	fprintf(stderr, "\t-h         show this summary\n");
+  	fprintf(stderr, "\t-s<delay>  delay in seconds between updates\n");
++ 	fprintf(stderr, "\t-o<order>  select sort column\n");
++ 	fprintf(stderr, "\t-I         do not show idle processes\n");
+  }
+  
+  EXPORT int main(int argc, char *argv[])
+***************
+*** 1279,1286 ****
+  	int 	status = 0;
+  	char	ch;
+  
+! 	while((ch = getopt(argc, argv, "hs:")) != EOF)
+  	{
+  		switch(ch)
+  		{
+  			case 's':
+--- 1221,1239 ----
+  	int 	status = 0;
+  	char	ch;
+  
+! 	if (argc < 2)
+  	{
++ 		char *e;
++ 		e = getenv("TOP");
++ 		if (e)
++ 		{
++ 			argv[1] = e;
++ 			argc = 2;
++ 		}
++ 	}
++ 
++ 	while((ch = getopt(argc, argv, "hs:o:I")) != EOF)
++ 	{
+  		switch(ch)
+  		{
+  			case 's':
+***************
+*** 1290,1295 ****
+--- 1243,1254 ----
+  					exit(1);
+  				}
+  				break;		
++ 			case 'o':
++ 				sort = atoi(optarg);
++ 				break;
++ 			case 'I':
++ 				idle = 0;
++ 				break;
+  			default:
+  			case 'h':
+  				usage(argv[0]);
+***************
+*** 1299,1306 ****
+  		argv += optind;
+  	}
+  
+- 	if(tcinit() < 0)
+- 		return(1);
+  #if !TTY_RAW
+  	if(
+  		(signal(SIGHUP, sighand) == -1)
+--- 1258,1263 ----
+***************
+*** 1312,1324 ****
+  		exit(1);
+  	}
+  #endif /* TTY_RAW */
+! 	if(config_tty(1, &lines, &columns) < 0)
+  		return(1);
+  
+  	if(do_top() != 0)
+  		status = 1;
+  
+! 	config_tty(0, NULL, NULL);
+  	if(done)
+  		fprintf(stdout, "*interrupt*\n");
+  	return(status);
+--- 1269,1285 ----
+  		exit(1);
+  	}
+  #endif /* TTY_RAW */
+! 
+! 	gethostname(host, sizeof(host)-1);
+! 	host[sizeof(host)-1] = 0;
+! 
+! 	if(config_tty(1) < 0)
+  		return(1);
+  
+  	if(do_top() != 0)
+  		status = 1;
+  
+! 	config_tty(0);
+  	if(done)
+  		fprintf(stdout, "*interrupt*\n");
+  	return(status);
+*** ./usr/src/ucb/top/top.1.old	Mon Mar  9 15:26:32 2020
+--- ./usr/src/ucb/top/top.1	Thu Mar 19 19:12:58 2020
+***************
+*** 14,19 ****
+--- 14,23 ----
+  .B \-h
+  ] [
+  .B \-s delay
++ ] [
++ .B \-o column
++ ] [
++ .B \-I
+  ]
+  .SH DESCRIPTION
+  The
+***************
+*** 31,40 ****
+  command line option is specified, its argument is the update delay
+  in seconds followed by an optional decimal point and up to 3 digits, allowing
+  millisecond accurate delay specifications.
+! The default delay is one second. The
+  .B \-h
+  command line option produces a usage summary.
+  .PP
+  .I Summary Display
+  .PP
+  The first line of the summary includes the name of the program, the
+--- 35,59 ----
+  command line option is specified, its argument is the update delay
+  in seconds followed by an optional decimal point and up to 3 digits, allowing
+  millisecond accurate delay specifications.
+! The default delay is one second.
+! .PP
+! If the
+! .B \-o
+! command line option is specified, its argument is the column over
+! which the list should be sorted. The
+  .B \-h
+  command line option produces a usage summary.
+  .PP
++ If the
++ .B \-I
++ command line option is specified, top start up with idle processes
++ being filtered out.
++ .PP
++ If no options are given on the command line, the enviornment
++ variable
++ .B TOP
++ translation will be used, if it is defined, as the command line options.
++ .PP
+  .I Summary Display
+  .PP
+  The first line of the summary includes the name of the program, the
+***************
+*** 128,137 ****
+  The display updates indefinately until a command in the form of a
+  key press is received, or a signal is received.
+  Keys are not echoed and are acted on immediately without the
+! need for a carriage return. The only command currently implemented is
+! the
+  .B q
+! command, which terminates the program. Any unrecognized command will
+  result in termination with a warning message.
+  .P
+  .SH EXAMPLE
+--- 147,170 ----
+  The display updates indefinately until a command in the form of a
+  key press is received, or a signal is received.
+  Keys are not echoed and are acted on immediately without the
+! need for a carriage return. 
+! The
+  .B q
+! command terminates the program.
+! .PP
+! The
+! .B s
+! command selects the timeout interval.
+! .PP
+! The
+! .B o
+! command selects the sorting order.
+! .PP
+! The
+! .B I
+! command toggles between displaying and hiding idle processes.
+! .PP
+! Any unrecognized command will
+  result in termination with a warning message.
+  .P
+  .SH EXAMPLE
+*** ./usr/src/ucb/top/Makefile.old	Wed Mar  4 20:18:38 2020
+--- ./usr/src/ucb/top/Makefile	Thu Mar 19 19:12:58 2020
+***************
+*** 10,16 ****
+  all: top ${MAN}
+  
+  top: top.o psdb.o
+! 	cc -i -o top top.o psdb.o -ltermcap
+  
+  top.o: top.c psdb.h
+  	cc ${CFLAGS} -c top.c
+--- 10,16 ----
+  all: top ${MAN}
+  
+  top: top.o psdb.o
+! 	cc -i -o top top.o psdb.o -lcurses -ltermcap
+  
+  top.o: top.c psdb.h
+  	cc ${CFLAGS} -c top.c
+***************
+*** 21,27 ****
+  top.0: top.1
+  	/usr/man/manroff ${MANSRC} > ${MAN}
+  
+! install:
+  	install -s -o root -g kmem -m 2755 top ${DESTDIR}/usr/ucb
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat1
+  
+--- 21,27 ----
+  top.0: top.1
+  	/usr/man/manroff ${MANSRC} > ${MAN}
+  
+! install: all
+  	install -s -o root -g kmem -m 2755 top ${DESTDIR}/usr/ucb
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat1
+  
+*** ./VERSION.old	Tue Mar 10 07:29:50 2020
+--- ./VERSION	Thu Mar 19 09:00:05 2020
+***************
+*** 1,5 ****
+! Current Patch Level: 465
+! Date: March 10, 2020
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 466
+! Date: March 19, 2020
+  
+  2.11 BSD
+  ============

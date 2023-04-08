@@ -1,0 +1,780 @@
+on:
+  push:
+    paths:
+      - patches/**
+      - .github/workflows/patches.yml
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    name: apply patches
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: configure aws cli for s3 uploads
+        run: |
+          pip install awscli-plugin-endpoint
+
+          mkdir ~/.aws
+          cat > ~/.aws/config <<CONF
+          [plugins]
+          endpoint = awscli_plugin_endpoint
+
+          [default]
+          region = ${SCW_REGION}
+          s3 =
+            endpoint_url = https://s3.fr-par.scw.cloud
+            signature_version = s3v4
+          s3api =
+            endpoint_url = https://s3.fr-par.scw.cloud
+          CONF
+          cat > ~/.aws/credentials <<CREDS
+          [default]
+          aws_access_key_id = ${{ secrets.SCW_ACCESS_KEY_ID }}
+          aws_secret_access_key = ${{ secrets.SCW_SECRET_KEY }}
+          CREDS
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_458
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-458.dsk.gz
+
+      - name: apply 458
+        if: steps.built_458.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 457
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/458 > /tmp/458.patch
+            cd /
+            patch -p0 < /tmp/458.patch
+            cd /usr/src/bin/tcsh
+            make
+            make install
+            make clean
+            cd /sys/SIMH
+            make
+            make install
+            cd /sys/GENERIC
+            make
+            cp unix /genunix
+
+      - if: steps.built_458.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-458.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_459
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-459.dsk.gz
+
+      - name: apply 459
+        if: steps.built_459.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 458
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/459 > /tmp/459.sh
+            cd /tmp
+            sh 459.sh
+            cd /
+            patch -p0 < /tmp/459.patch
+            install -c -m 444 -o root -g wheel /tmp/stdarg.h /usr/include
+            rm /usr/include/vaxuba
+            rm /usr/src/asm.sed*
+            rm -r /usr/src/include
+
+      - if: steps.built_459.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-459.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_460
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-460.dsk.gz
+
+      - name: apply 460
+        if: steps.built_460.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 459
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/460 > /tmp/460.sh
+            cd /tmp
+            sh 460.sh
+            uudecode cpp.tar.Z.uu
+            uncompress cpp.tar.Z
+            cd /
+            patch -p0 < /tmp/ccom.patch
+            cd /usr/src/lib/ccom
+            make
+            make install
+            cd /usr/src/bin
+            make cc
+            install -m 755 -o root -g wheel -s cc /bin
+            cd /
+            tar xf /tmp/cpp.tar
+            cd /usr/src/lib/cpp
+            make
+            make install
+            cd /
+            patch -p0 < /tmp/src.patch
+
+      - if: steps.built_460.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-460.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_461
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-461.dsk.gz
+
+      - name: apply 461
+        if: steps.built_461.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 460
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/461 > /tmp/461.patch
+            cd /
+            patch -p0 < /tmp/461.patch
+            cd /usr/src/ucb/ex
+            make
+            make install
+            make clean
+            cd /sys/SIMH
+            make
+            make install
+            cd /sys/GENERIC
+            make
+            cp unix /genunix
+
+      - if: steps.built_461.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-461.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_462
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-462.dsk.gz
+
+      - name: apply 462
+        if: steps.built_462.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 461
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/462 > /tmp/462.patch
+            cd /
+            patch -p0 < /tmp/462.patch
+            cd /usr/src/usr.bin/f77
+            rm -rf malloc.c
+            make
+            make install
+            make clean
+
+      - if: steps.built_462.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-462.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_463
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-463.dsk.gz
+
+      - name: apply 463
+        if: steps.built_463.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 462
+          run: |
+            sed -e '1,/.*--- cut here---.*/ d' < patches/463 > /tmp/463.patch
+            cd /
+            patch -p0 < /tmp/463.patch
+            cd /usr/src/ucb/rlogin
+            make
+            make install
+            make clean
+            cd /usr/src/ucb/sendbug
+            make
+            make install
+            make clean
+            cd /sys/SIMH
+            make
+            make install
+            cd /sys/GENERIC
+            make
+            cp unix /genunix
+            cd /usr/src/man/man3
+            make sysctl.0
+            install -c -o bin -g bin -m 444 sysctl.0 /usr/man/cat3
+            rm sysctl.0
+
+      - if: steps.built_463.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-463.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_464
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-464.dsk.gz
+
+      - name: apply 464
+        if: steps.built_464.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 463
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/464 > /tmp/464.patch
+            cd /
+            patch -p0 < /tmp/464.patch
+            cd /sys/SIMH
+            make
+            make install
+            cd /sys/GENERIC
+            make
+            cp unix /genunix
+
+      - if: steps.built_464.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-464.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_465
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-465.dsk.gz
+
+      - name: apply 465
+        if: steps.built_465.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 464
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/465 > /tmp/465.sh
+            cd /tmp
+            sh 465.sh
+            sh top.shar
+            cd /
+            patch -p0 < /tmp/465.patch
+            cd /usr/src/lib/ccom
+            make
+            make install
+            make clean
+            cd /usr/src/ucb/top
+            make
+            make install
+            make clean
+
+      - if: steps.built_465.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-465.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_466
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-466.dsk.gz
+
+      - name: apply 466
+        if: steps.built_466.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 465
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/466 > /tmp/466.patch
+            cd /
+            patch -p0 < /tmp/466.patch
+            cd /usr/src/ucb/top
+            make
+            make install
+            make clean
+            cd /usr/src/bin
+            make df size
+            install -s -m 751 -g staff size /bin/size
+            install -s -m 2751 -g operator df /bin/df
+            make clean
+            cd /usr/src/man/man1
+            make df.0
+            install -c -o bin -g bin -m 444 df.0 /usr/man/cat1
+            make clean
+            cd /usr/src/ucb/top
+            make
+            make install
+            make clean
+
+      - if: steps.built_466.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-466.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_467
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-467.dsk.gz
+
+      - name: apply 467
+        if: steps.built_467.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 466
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/467 > /tmp/467.uu
+            cd /tmp
+            uudecode < 467.uu
+            uncompress 467.tar.Z
+            cd /
+            tar xpvf /tmp/467.tar
+            cd /usr/src/bin
+            make ps
+            install -g kmem -m 2751 -s ps /bin/ps
+            install -c -m 755 -o root false.sh /bin/false
+            install -c -m 755 -o root true.sh /bin/true
+            cd /usr/src/games/words
+            make install
+            make clean
+            cd /usr/src/new/rcs/src
+            make merge
+            install -m 775 -o bin -g bin merge /usr/new/merge
+            make clean
+            cd /usr/src/usr.bin
+            install -c -m 555 lorder.sh /usr/bin/lorder
+            install -c -m 555 nohup.sh /usr/bin/nohup
+            cd /usr/src/ucb/tn3270
+            make install
+            make clean
+            cd /usr/src/ucb/top
+            make install
+            make clean
+
+      - if: steps.built_467.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-467.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_468
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-468.dsk.gz
+
+      - name: apply 468
+        if: steps.built_468.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 467
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/468 > /tmp/468.tar.Z.uu
+            cd /tmp
+            uudecode < 468.tar.Z.uu
+            uncompress 468.tar.Z
+            cd /
+            tar xpf /tmp/468.tar
+            cd /usr/src/ucb/more
+            make
+            make install
+            make clean
+            cd /usr/src/share/termcap
+            make
+            make install
+            make clean
+            cd /usr/src/share/tmac
+            make
+            make install
+            make clean
+            rm /usr/share/term/*
+            cd /usr/src/usr.bin/roff
+            make
+            make install
+            make clean
+            cd /usr/src/man/man1
+            make nroff.0
+            install -o bin -g bin -m 444 nroff.0 /usr/man/cat1
+            cd /usr/src/man/man7
+            make mdoc.0 mdoc.samples.0
+            install -o bin -g bin -m 444 mdoc.0 mdoc.samples.0 /usr/man/cat7
+
+      - if: steps.built_468.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-468.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_469
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-469.dsk.gz
+
+      - name: apply 469
+        if: steps.built_469.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 468
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/469 > /tmp/469.sh
+            cd /tmp
+            sh 469.sh
+            install -c -m 444 northamerica /usr/src/share/zoneinfo/northamerica
+            cd /
+            patch -p0 < /tmp/469.patch
+            cd /usr/src/share/zoneinfo
+            make
+            make install
+            make clean
+
+      - if: steps.built_469.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-469.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_470
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-470.dsk.gz
+
+      - name: apply 470
+        if: steps.built_470.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 469
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/470 > /tmp/470.uu
+            cd /tmp
+            uudecode < 470.uu
+            tar xpf 470.tar
+            install -c -m 444 -o bin makewhatis.sed /usr/src/man
+            cd /
+            patch -p0 < /tmp/470.patch
+            cd /usr/src/man
+            make scriptinstall
+            /usr/sbin/makewhatis
+
+      - if: steps.built_470.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-470.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_471
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-471.dsk.gz
+
+      - name: apply 471
+        if: steps.built_471.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 470
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/471 > /tmp/471.sh
+            cd /tmp
+            sh 471.sh
+            uudecode < 471.uu
+            uncompress 471.tar.Z
+            cd /
+            tar xpf /tmp/471.tar
+            patch -p0 < /tmp/471.diffs
+            cd /usr/src/ucb/more
+            make
+            make install
+            make clean
+            cd /usr/src/ucb/top
+            make
+            make install
+            make clean
+            cd /usr/src/usr.sbin/nc
+            make
+            make install
+            make clean
+            cd /sys/SIMH
+            make
+            make install
+            cd /sys/GENERIC
+            make
+            cp unix /genunix
+
+      - if: steps.built_471.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-471.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_472
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-472.dsk.gz
+
+      - name: apply 472
+        if: steps.built_472.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 471
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/472 > /tmp/472.patch
+            cd /
+            patch -p0 < /tmp/472.patch
+            cd /usr/src/usr.bin/at
+            make
+            make install
+            make clean
+            cd /usr/src/man/man1
+            /usr/man/manroff at.1 > at.0
+            install -o bin -g bin -m 444 at.0 /usr/man/cat1/at.0
+
+      - if: steps.built_472.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-472.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_473
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-473.dsk.gz
+
+      - name: apply 473
+        if: steps.built_473.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 472
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/473 > /tmp/473
+            cd /
+            patch -p0 < /tmp/473
+            cd /usr/src/lib/ccom
+            make
+            make install
+            make clean
+            cd /usr/src/lib/c2
+            make
+            make install
+            make clean
+            cd /usr/src/sbin/ifconfig
+            make
+            make install
+            make clean
+            cd /usr/src/usr.bin/uucp
+            make uuxqt
+            install -s -m 6110 -o uucp -g daemon uuxqt /usr/libexec
+            make clean
+            cd /usr/src/usr.sbin/bad144
+            make
+            make install
+            make clean
+
+      - if: steps.built_473.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-473.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_474
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-474.dsk.gz
+
+      - name: apply 474
+        if: steps.built_474.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 473
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/474 > /tmp/474.patch
+            cd /
+            patch -p0 < /tmp/474.patch
+            cd /sys/SIMH
+            make
+            make install
+            cd /sys/GENERIC
+            make
+            cp unix /genunix
+
+      - if: steps.built_474.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-474.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_475
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-475.dsk.gz
+
+      - name: apply 475
+        if: steps.built_475.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 474
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/475 > /tmp/475.patch
+            cd /
+            patch -p0 < /tmp/475.patch
+            cd /usr/src/ucb/top
+            make
+            make install
+            make clean
+            cd /sys/GENERIC
+            make
+            cp unix /genunix
+
+      - if: steps.built_475.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-475.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_476
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-476.dsk.gz
+
+      - name: apply 476
+        if: steps.built_476.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 475
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/476 > /tmp/476.patch
+            cd /
+            patch -p0 < /tmp/476.patch
+            cd /usr/src/bin/disklabel
+            make
+            make install
+            make clean
+            cd /usr/src/sys/mdec
+            make
+            make install
+            make clean
+            rm dvhpuboot.s hpuboot.s rm03uboot.s rm05uboot.s si51uboot.s si94uboot.s || true
+
+      - if: steps.built_476.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-476.dsk.gz
+
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_477
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-477.dsk.gz
+
+      - name: apply 477
+        if: steps.built_477.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 476
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/477 > /tmp/477.patch
+            cd /
+            patch -p0 < /tmp/477.patch
+
+      - if: steps.built_477.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-477.dsk.gz
+
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_478
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-478.dsk.gz
+
+      - name: apply 478
+        if: steps.built_478.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 477
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/478 > /tmp/478.patch
+            cd /
+            patch -p0 < /tmp/478.patch
+            cd /usr/src/games/backgammon
+            make
+            make install
+            make clean
+            cd /usr/src/bin/tcsh
+            make
+            make install
+            make clean
+            cd /usr/src/usr.bin/dc
+            make
+            make install
+            make clean
+            cd /usr/src/new/rcs/src
+            make
+            make install
+            make clean
+
+      - if: steps.built_478.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-478.dsk.gz
+
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_479
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-479.dsk.gz
+
+      - name: apply 479
+        if: steps.built_479.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 478
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/479 > /tmp/479.patch
+            cd /
+            patch -p0 < /tmp/479.patch
+            cd /usr/src/ucb/ftp
+            make
+            make install
+            make clean
+
+      - if: steps.built_479.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-479.dsk.gz
+

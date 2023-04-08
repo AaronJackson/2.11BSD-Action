@@ -1,0 +1,208 @@
+Subject: North America timezone files outdated
+Index:	 src/share/zoneinfo/northamerica
+
+Description:
+	 The timezone tables for North America were last updated in 1987.
+	 DST rules have been changed several times since.
+
+Repeat-By:
+	# date
+	Fri Apr  3 12:26:44 EST 2020
+
+	but Daylight Saving Time started March 8 2020.
+	
+Fix:
+	Cut where indicated and save to a file (/tmp/foo).  Then
+
+cd /tmp
+sh foo
+install -c -m 444 northamerica /usr/src/share/zoneinfo/northamerica
+
+cd /
+patch -p0 < /tmp/469.patch
+
+cd /usr/src/share/zoneinfo
+make install
+make clean
+
+	If you are not in North America there is nothing more that needs
+	to be done.
+
+	However if you are in North America:
+
+ls -l /etc/localtime
+
+	IF /etc/localtime is a regular file (NOT a symlink pointing to one
+	of the files in /usr/share/zoneinfo) then it will be necessary to
+	manually copy the appropriate file to /etc/localtime.  
+
+	On my system:  cp /usr/share/zoneinfo/US/Central /etc/localtime
+
+	The reason for having /etc/localtime as a regular file is that
+	'date' will behave correctly even when /usr is not mounted.
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.update.uu.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+#! /bin/sh
+# This is a shell archive, meaning:
+# 1. Remove everything above the #! /bin/sh line.
+# 2. Save the resulting text in a file.
+# 3. Execute the file with /bin/sh (not csh) to create:
+#	469.patch
+#	northamerica
+# This archive created: Sun Apr 12 11:15:57 2020
+export PATH; PATH=/bin:/usr/bin:$PATH
+if test -f '469.patch'
+then
+	echo shar: "will not over-write existing file '469.patch'"
+else
+sed 's/^X//' << \SHAR_EOF > '469.patch'
+X*** ./VERSION.old	Tue Mar 24 14:01:44 2020
+X--- ./VERSION	Fri Apr  3 23:20:43 2020
+X***************
+X*** 1,5 ****
+X! Current Patch Level: 468
+X! Date: March 24, 2020
+X  
+X  2.11 BSD
+X  ============
+X--- 1,5 ----
+X! Current Patch Level: 469
+X! Date: April 3, 2020
+X  
+X  2.11 BSD
+X  ============
+SHAR_EOF
+fi
+if test -f 'northamerica'
+then
+	echo shar: "will not over-write existing file 'northamerica'"
+else
+sed 's/^X//' << \SHAR_EOF > 'northamerica'
+X# @(#)northamerica	4.0 (2.11BSD 2020/4/3)
+X
+X# Despite the performance of existing (4.[123]BSD, System V Release 2.0) code,
+X# US Daylight Saving Time ended on the last Sunday of *October* in 1974.
+X# See, for example, the front page of the Saturday, October 26, 1974
+X# and Sunday, October 27, 1974 editions of the Washington Post.
+X
+X# Note also this from seismo!munnari!kre:
+X# "I recall also being told by someone once that Canada didn't have
+X# the DST variations in 74/75 that the US did, but I am not nearly
+X# sure enough of this to add anything."
+X# The above has been confirmed by Bob Devine; we'll go with it here.
+X
+X# Before the Uniform Time Act of 1966 took effect in 1967, observance of
+X# Daylight Saving Time in the US was by local option, except during wartime.
+X
+X# Rule	NAME	FROM	TO	TYPE	IN	ON	AT	SAVE	LETTER/S
+XRule	US	1918	1919	-	Mar	lastSun	2:00	1:00	D
+XRule	US	1918	1919	-	Oct	lastSun	2:00	0	S
+XRule	US	1942	only	-	Feb	9	2:00	1:00	W # War
+XRule	US	1945	only	-	Sep	30	2:00	0	S
+XRule	US	1967	max	-	Oct	lastSun	2:00	0	S
+XRule	US	1967	1973	-	Apr	lastSun	2:00	1:00	D
+XRule	US	1974	only	-	Jan	6	2:00	1:00	D
+XRule	US	1975	only	-	Feb	23	2:00	1:00	D
+XRule	US	1976	1986	-	Apr	lastSun	2:00	1:00	D
+XRule	US	1987	2006	-	Apr	Sun>=1	2:00	1:00	D
+XRule	US	2007	max	-	Mar	Sun>=8	2:00	1:00	D
+XRule	US	2007	max	-	Nov	Sun>=1	2:00	0	S
+X
+X###############################################################################
+X
+X# New names
+X
+X# Zone	NAME		GMTOFF	RULES/SAVE	FORMAT	 [UNTIL]
+XZone	US/Eastern	-5:00	US		E%sT
+XZone	US/Central	-6:00	US		C%sT
+XZone	US/Mountain	-7:00	US		M%sT
+XZone	US/Pacific	-8:00	US		P%sT
+XZone	US/Yukon	-9:00	US		Y%sT
+X
+X# Mainland US areas that are always Standard as of 1986.
+X
+XZone	US/East-Indiana	-5:00	US	E%sT	1946
+X			-5:00	-	EST		# Always EST as of 1986
+XZone	US/Arizona	-7:00	US	M%sT	1946
+X			-7:00	-	MST		# Always MST as of 1986
+X
+X# And then there's Hawaii.
+X# DST was observed for one day in 1933;
+X# Standard time was change by half an hour in 1947;
+X# it's always standard as of 1986.
+X
+XZone	US/Hawaii	-10:30	US	H%sT	1933 Apr 30 2:00
+X			-10:30	1:00	HDT	1933 May 1 2:00
+X			-10:30	US	H%sT	1947 Jun 8 2:00
+X			-10:00	-	HST
+X
+X# Old names, for S5 users
+X
+X# Link	LINK-FROM	LINK-TO
+XLink	US/Eastern	EST5EDT
+XLink	US/Central	CST6CDT
+XLink	US/Mountain	MST7MDT
+XLink	US/Pacific	PST8PDT
+XLink	US/East-Indiana	EST
+XLink	US/Arizona	MST
+XLink	US/Hawaii	HST
+X
+X################################################################################
+X
+X# Canada is reportedly lots easier than the US--leastways since 1951.
+X# I don't know what they did before then.
+X# 4.3BSD claims that it's perfectly regular.
+X# According to a posting in "comp.bugs.misc", "comp.unix.wizards", etc.
+X# on February 8, 1987, by Dave Sherman of the Law Society of Upper Canada,
+X# "...Canada (well, Ontario and at least some of the other provinces) are
+X# adopting the new daylight savings time rules...".  We assume all of
+X# Canada is doing so.
+X
+X# Rule	NAME	FROM	TO	TYPE	IN	ON	AT	SAVE	LETTER/S
+XRule	Canada	1969	max	-	Oct	lastSun	2:00	0	S
+XRule	Canada	1969	1986	-	Apr	lastSun	2:00	1:00	D
+XRule    Canada  1987    2006    -       Apr     Sun>=1  2:00    1:00    D
+XRule    Canada  2007    max     -       Mar     Sun>=8  2:00    1:00    D
+XRule    Canada  2007    max     -       Nov     Sun>=1  2:00    0       S
+X
+X
+X# Zone	NAME			GMTOFF	RULES/SAVE	FORMAT	[UNTIL]
+X# Bob Devine says that DST *is* observed in Newfoundland
+XZone	Canada/Newfoundland	-3:30	Canada		N%sT
+XZone	Canada/Atlantic		-4:00	Canada		A%sT
+XZone	Canada/Eastern		-5:00	Canada		E%sT
+XZone	Canada/Central		-6:00	Canada		C%sT
+XZone	Canada/Mountain		-7:00	Canada		M%sT
+XZone	Canada/Pacific		-8:00	Canada		P%sT
+XZone	Canada/Yukon		-9:00	Canada		Y%sT
+X
+X################################################################################
+X
+X# ?Mexico?  !Quien sabe!
+X# Rule  NAME    FROM    TO      TYPE    IN      ON      AT      SAVE    LETTER/S
+XRule    Mexico  1939    only    -       Feb     5       0:00    1:00    D
+XRule    Mexico  1939    only    -       Jun     25      0:00    0       S
+XRule    Mexico  1940    only    -       Dec     9       0:00    1:00    D
+XRule    Mexico  1941    only    -       Apr     1       0:00    0       S
+XRule    Mexico  1943    only    -       Dec     16      0:00    1:00    W # War
+XRule    Mexico  1944    only    -       May     1       0:00    0       S
+XRule    Mexico  1950    only    -       Feb     12      0:00    1:00    D
+XRule    Mexico  1950    only    -       Jul     30      0:00    0       S
+XRule    Mexico  1996    2000    -       Apr     Sun>=1  2:00    1:00    D
+XRule    Mexico  1996    2000    -       Oct     lastSun 2:00    0       S
+XRule    Mexico  2001    only    -       May     Sun>=1  2:00    1:00    D
+XRule    Mexico  2001    only    -       Sep     lastSun 2:00    0       S
+XRule    Mexico  2002    max     -       Apr     Sun>=1  2:00    1:00    D
+XRule    Mexico  2002    max     -       Oct     lastSun 2:00    0       S
+X
+SHAR_EOF
+fi
+exit 0
+#	End of shell archive

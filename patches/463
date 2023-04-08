@@ -1,0 +1,701 @@
+Subject: sysctl(3) returns invalid VM_COREMAP and VM_SWAPMAP data, sendbug(1) uses obsolete addresses, rlogin(1) compile errors
+Index:  sys/sys/kern_sysctl 2.11BSD
+
+Description:
+        The sysctl system call incorrectly implements the VM_COREMAP and
+        VM_SWAPMAP data requests. The data copied if from the address of
+        the map structure which contains the addresses of the first
+        and last elements of the array plus its name, not the actual
+        array of mapent structures as intended. The correct amount of
+        data is copied, so unrelated kernel data is also added to the
+        callers buffer.
+
+	sendbug(1) contains uucp and email addresses that are outdated and 
+	obsolete.
+
+	Compiling rlogin.c on a different system (macOS) fails with many errors.
+
+Repeat-By:
+        Any attempt to use one of the two calls will return the wrong data.
+        An example implementation of the 'top' program which uses sysctl
+        to obtain free memory and swap information produces incorrect
+        results when run on an unfixed kernel.
+
+	sendbug(1):  examination.  the uucp addresses haven't been valid for 
+	decades.
+
+	copy rlogin.c to a macOS system and attemp to compile it.  Note the 
+	fatal errors and many warnings.  
+
+Fix:
+        Change kern_sysctl.c as follows:
+< return (sysctl_rdstruct(oldp, oldlenp, newp, swapmap,
+> return (sysctl_rdstruct(oldp, oldlenp, newp, swapmap[0].
+< return (sysctl_rdstruct(oldp, oldlenp, newp, coremap,
+> return (sysctl_rdstruct(oldp, oldlenp, newp, coremap[0].
+
+        Also correct the man page entry from:
+         VM_SWAPMAP          struct map        no
+         VM_COREMAP          struct map        no
+        to:
+         VM_SWAPMAP          struct mapent     no
+         VM_COREMAP          struct mapent     no
+
+        Finally, to make returning the swapmap information more useful,
+        a VM_NSWAP call is added added to return the kernel 'nswap' value.
+        The is analogous to the 'physmem' value for coremap (which is 
+	available via sysctl).
+
+	To apply this patch cut where indicated and save to a file (/tmp/463).
+
+	Then:
+
+cd /
+patch -p0 < /tmp/463
+cd /usr/src/ucb/rlogin
+make 
+make install
+make clean
+
+cd /usr/src/ucb/sendbug
+make
+make install
+make clean
+
+# Now rebuild the kerne;.  I keep the old kernel around until the new one is
+# in use.  The onetnix and ounix can be removed at any time.
+cd /sys/YOUR_KERNEL
+make
+mv /unix /ounix 
+mv /netnix /onetnix
+mv unix netnix /
+reboot
+
+cd /usr/src/man/man3
+make sysctl.0
+install -c -o bin -g bin -m 444 sysctl.0 /usr/man/cat3
+rm sysctl.0
+
+--------------------------------- cut here----------------------
+*** ./usr/src/sys/sys/kern_sysctl.c.old	Thu Dec 20 20:44:23 2018
+--- ./usr/src/sys/sys/kern_sysctl.c	Tue Mar  3 09:02:29 2020
+***************
+*** 33,39 ****
+   * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+   * SUCH DAMAGE.
+   *
+!  *	@(#)kern_sysctl.c	8.4.13 (2.11BSD) 2018/12/20
+   */
+  
+  /*
+--- 33,39 ----
+   * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+   * SUCH DAMAGE.
+   *
+!  *	@(#)kern_sysctl.c	8.5 (2.11BSD) 2020/3/2
+   */
+  
+  /*
+***************
+*** 454,460 ****
+  					(char *)swapmap[0].m_map;
+  			return(0);
+  		}
+! 		return (sysctl_rdstruct(oldp, oldlenp, newp, swapmap,
+  			(int)swapmap[0].m_limit - (int)swapmap[0].m_map));
+  	case VM_COREMAP:
+  		if (oldp == NULL) {
+--- 454,460 ----
+  					(char *)swapmap[0].m_map;
+  			return(0);
+  		}
+! 		return (sysctl_rdstruct(oldp, oldlenp, newp, swapmap[0],
+  			(int)swapmap[0].m_limit - (int)swapmap[0].m_map));
+  	case VM_COREMAP:
+  		if (oldp == NULL) {
+***************
+*** 462,469 ****
+  					(char *)coremap[0].m_map;
+  			return(0);
+  		}
+! 		return (sysctl_rdstruct(oldp, oldlenp, newp, coremap,
+  			(int)coremap[0].m_limit - (int)coremap[0].m_map));
+  	default:
+  		return (EOPNOTSUPP);
+  	}
+--- 462,471 ----
+  					(char *)coremap[0].m_map;
+  			return(0);
+  		}
+! 		return (sysctl_rdstruct(oldp, oldlenp, newp, coremap[0],
+  			(int)coremap[0].m_limit - (int)coremap[0].m_map));
++ 	case VM_NSWAP:
++ 		return (sysctl_rdint(oldp, oldlenp, newp, nswap));
+  	default:
+  		return (EOPNOTSUPP);
+  	}
+*** ./usr/src/sys/h/vmparam.h.old	Thu Jan 19 21:53:18 1995
+--- ./usr/src/sys/h/vmparam.h	Tue Mar  3 09:24:58 2020
+***************
+*** 3,9 ****
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)vmparam.h	7.1.1 (2.11BSD GTE) 1/14/95
+   */
+  
+  /*
+--- 3,9 ----
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)vmparam.h	7.2 (2.11BSD) 2020/3/3
+   */
+  
+  /*
+***************
+*** 22,28 ****
+  #define	VM_LOADAVG	2		/* struct loadavg */
+  #define	VM_SWAPMAP	3		/* struct mapent _swapmap[] */
+  #define	VM_COREMAP	4		/* struct mapent _coremap[] */
+! #define	VM_MAXID	5		/* number of valid vm ids */
+  
+  #ifndef	KERNEL
+  #define CTL_VM_NAMES { \
+--- 22,29 ----
+  #define	VM_LOADAVG	2		/* struct loadavg */
+  #define	VM_SWAPMAP	3		/* struct mapent _swapmap[] */
+  #define	VM_COREMAP	4		/* struct mapent _coremap[] */
+! #define VM_NSWAP	5		/* int nswap */
+! #define	VM_MAXID	6		/* number of valid vm ids */
+  
+  #ifndef	KERNEL
+  #define CTL_VM_NAMES { \
+***************
+*** 31,35 ****
+--- 32,37 ----
+  	{ "loadavg", CTLTYPE_STRUCT }, \
+  	{ "swapmap", CTLTYPE_STRUCT }, \
+  	{ "coremap", CTLTYPE_STRUCT }, \
++ 	{ "nswap", CTLTYPE_INT }, \
+  }
+  #endif
+*** ./usr/src/man/man3/sysctl.3.old	Thu Jan 19 23:51:34 1995
+--- ./usr/src/man/man3/sysctl.3	Tue Mar  3 10:07:57 2020
+***************
+*** 29,37 ****
+  .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  .\" SUCH DAMAGE.
+  .\"
+! .\"	@(#)sysctl.3	8.1.1 (2.11BSD GTE) 1/13/95
+  .\"
+! .TH SYSCTL 3 "January 13, 1995"
+  .UC 4
+  .SH NAME
+  sysctl \- get or set system information
+--- 29,37 ----
+  .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  .\" SUCH DAMAGE.
+  .\"
+! .\"	@(#)sysctl.3	8.1.2 (2.11BSD) 2020/3/2
+  .\"
+! .TH SYSCTL 3 "March 2, 2020"
+  .UC 4
+  .SH NAME
+  sysctl \- get or set system information
+***************
+*** 836,843 ****
+  	Second level name	Type	Changeable
+  	VM\_LOADAVG	struct loadavg	no
+  	VM\_METER	struct vmtotal	no
+! 	VM\_SWAPMAP	struct map	no
+! 	VM\_COREMAP	struct map	no
+  .fi
+  .PP
+  VM_LOADAVG
+--- 836,844 ----
+  	Second level name	Type	Changeable
+  	VM\_LOADAVG	struct loadavg	no
+  	VM\_METER	struct vmtotal	no
+! 	VM\_SWAPMAP	struct mapent	no
+! 	VM\_COREMAP	struct mapent	no
+! 	VM\_NSWAP	int		no
+  .fi
+  .PP
+  VM_LOADAVG
+***************
+*** 870,876 ****
+--- 871,885 ----
+  .in +.5i
+  Same as for swapmap above except that the core allocation map is
+  returned.
++ .br
+  .in -.5i
++ .sp
++ VM_NSWAP
++ .br
++ .in +.5i
++ Return the number of sectors of swap space.  This is the value of the kernel
++ variable 'nswap'.
++ .br
+  .SH RETURN VALUES
+  If the call to
+  \fBsysctl\fP
+*** ./usr/src/ucb/sendbug/sendbug.sh.old	Fri Oct 25 22:39:28 1996
+--- ./usr/src/ucb/sendbug/sendbug.sh	Thu Feb 27 09:19:02 2020
+***************
+*** 4,10 ****
+  # All rights reserved.  The Berkeley software License Agreement
+  # specifies the terms and conditions for redistribution.
+  #
+! #	@(#)sendbug.sh	6.1 (2.11BSD) 1996/10/25
+  #
+  # Create a bug report and mail to the 2bsd maintainer.
+  #
+--- 4,10 ----
+  # All rights reserved.  The Berkeley software License Agreement
+  # specifies the terms and conditions for redistribution.
+  #
+! #	@(#)sendbug.sh	6.2 (2.11BSD) 2020/2/27
+  #
+  # Create a bug report and mail to the 2bsd maintainer.
+  #
+***************
+*** 12,20 ****
+  TEMP=/tmp/bug$$
+  FORMAT=/usr/share/misc/bugformat
+  
+! # uucp sites should use ": ${BUGADDR=wlbr!wlv!sms}" with a suitable path.
+! #   Use of the uucp address is not recommended.
+! : ${BUGADDR=sms@MOE.2BSD.COM}
+  : ${EDITOR=/usr/ucb/vi}
+  
+  trap '/bin/rm -f $TEMP ; exit 1' 1 2 3 13 15
+--- 12,18 ----
+  TEMP=/tmp/bug$$
+  FORMAT=/usr/share/misc/bugformat
+  
+! : ${BUGADDR=sms@2BSD.COM}
+  : ${EDITOR=/usr/ucb/vi}
+  
+  trap '/bin/rm -f $TEMP ; exit 1' 1 2 3 13 15
+*** ./usr/src/ucb/rlogin/rlogin.c.old	Fri Oct 13 23:54:55 2000
+--- ./usr/src/ucb/rlogin/rlogin.c	Fri Feb  7 09:51:33 2020
+***************
+*** 9,20 ****
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)rlogin.c	5.10.2 (2.11BSD) 2000/5/17";
+  #endif
+  
+  /*
+   * rlogin - remote login
+   */
+  #include <sys/param.h>
+  #include <sys/errno.h>
+  #include <sys/file.h>
+--- 9,21 ----
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)rlogin.c	5.11 (2.11BSD) 2020/2/7";
+  #endif
+  
+  /*
+   * rlogin - remote login
+   */
++ #include <unistd.h>
+  #include <sys/param.h>
+  #include <sys/errno.h>
+  #include <sys/file.h>
+***************
+*** 35,41 ****
+  
+  # ifndef TIOCPKT_WINDOW
+  # define TIOCPKT_WINDOW 0x80
+! # endif TIOCPKT_WINDOW
+  
+  char	*name;
+  int	rem;
+--- 36,42 ----
+  
+  # ifndef TIOCPKT_WINDOW
+  # define TIOCPKT_WINDOW 0x80
+! # endif
+  
+  char	*name;
+  int	rem;
+***************
+*** 46,61 ****
+      { "0", "50", "75", "110", "134", "150", "200", "300",
+        "600", "1200", "1800", "2400", "4800", "9600", "19200", "38400" };
+  char	term[256] = "network";
+! int	lostpeer();
+  int	dosigwinch = 0;
+  struct	winsize winsize;
+! int	sigwinch(), oob();
+  
+  main(argc, argv)
+  	int argc;
+  	char **argv;
+  {
+! 	char *host, *cp;
+  	struct sgttyb ttyb;
+  	struct passwd *pwd;
+  	struct servent *sp;
+--- 47,64 ----
+      { "0", "50", "75", "110", "134", "150", "200", "300",
+        "600", "1200", "1800", "2400", "4800", "9600", "19200", "38400" };
+  char	term[256] = "network";
+! void	lostpeer(), stop(), doit();
+  int	dosigwinch = 0;
+  struct	winsize winsize;
+! int	reader();
+! void	sigwinch(), oob(), mode(), echo(), sendwindow(), prf(), writer();
+  
++ int
+  main(argc, argv)
+  	int argc;
+  	char **argv;
+  {
+! 	char *host = 0, *cp;
+  	struct sgttyb ttyb;
+  	struct passwd *pwd;
+  	struct servent *sp;
+***************
+*** 63,75 ****
+  	long oldmask;
+  	int on = 1;
+  
+! 	host = rindex(argv[0], '/');
+! 	if (host)
+! 		host++;
+! 	else
+! 		host = argv[0];
+! 	argv++, --argc;
+! 	if (!strcmp(host, "rlogin"))
+  		host = *argv++, --argc;
+  another:
+  	if (argc > 0 && !strcmp(*argv, "-d")) {
+--- 66,74 ----
+  	long oldmask;
+  	int on = 1;
+  
+! 	argv++, argc--;		/* skip argv[0] */
+! 
+! 	if (argc > 0)
+  		host = *argv++, --argc;
+  another:
+  	if (argc > 0 && !strcmp(*argv, "-d")) {
+***************
+*** 144,157 ****
+  	exit(1);
+  }
+  
+- #define CRLF "\r\n"
+- 
+  int	child;
+! int	catchild();
+! int	writeroob();
+! 
+! int	defflags;
+! int	deflflags;
+  char	deferase, defkill;
+  struct	tchars deftc;
+  struct	ltchars defltc;
+--- 143,151 ----
+  	exit(1);
+  }
+  
+  int	child;
+! void	catchild(), done(), writeroob();
+! int	defflags, deflflags;
+  char	deferase, defkill;
+  struct	tchars deftc;
+  struct	ltchars defltc;
+***************
+*** 158,164 ****
+  struct	tchars notc =	{ -1, -1, -1, -1, -1, -1 };
+  struct	ltchars noltc =	{ -1, -1, -1, -1, -1, -1 };
+  
+! doit(oldmask)
+  	long oldmask;
+  {
+  	struct sgttyb sb;
+--- 152,158 ----
+  struct	tchars notc =	{ -1, -1, -1, -1, -1, -1 };
+  struct	ltchars noltc =	{ -1, -1, -1, -1, -1, -1 };
+  
+! void doit(oldmask)
+  	long oldmask;
+  {
+  	struct sgttyb sb;
+***************
+*** 199,205 ****
+  	done(0);
+  }
+  
+! done(status)
+  	int status;
+  {
+  
+--- 193,199 ----
+  	done(0);
+  }
+  
+! void done(status)
+  	int status;
+  {
+  
+***************
+*** 213,219 ****
+   * This is called when the reader process gets the out-of-band (urgent)
+   * request to turn on the window-changing protocol.
+   */
+! writeroob()
+  {
+  
+  	if (dosigwinch == 0) {
+--- 207,213 ----
+   * This is called when the reader process gets the out-of-band (urgent)
+   * request to turn on the window-changing protocol.
+   */
+! void writeroob()
+  {
+  
+  	if (dosigwinch == 0) {
+***************
+*** 223,229 ****
+  	dosigwinch = 1;
+  }
+  
+! catchild()
+  {
+  	union wait status;
+  	int pid;
+--- 217,223 ----
+  	dosigwinch = 1;
+  }
+  
+! void catchild()
+  {
+  	union wait status;
+  	int pid;
+***************
+*** 235,241 ****
+  	/*
+  	 * if the child (reader) dies, just quit
+  	 */
+! 	if (pid < 0 || pid == child && !WIFSTOPPED(status))
+  		done(status.w_termsig | status.w_retcode);
+  	goto again;
+  }
+--- 229,235 ----
+  	/*
+  	 * if the child (reader) dies, just quit
+  	 */
+! 	if (pid < 0 || (pid == child && !WIFSTOPPED(status)))
+  		done(status.w_termsig | status.w_retcode);
+  	goto again;
+  }
+***************
+*** 246,257 ****
+   * ~^Z	suspend rlogin process.
+   * ~^Y  suspend rlogin process, but leave reader alone.
+   */
+! writer()
+  {
+  	char c;
+! 	register n;
+! 	register bol = 1;               /* beginning of line */
+! 	register local = 0;
+  
+  	for (;;) {
+  		n = read(0, &c, 1);
+--- 240,251 ----
+   * ~^Z	suspend rlogin process.
+   * ~^Y  suspend rlogin process, but leave reader alone.
+   */
+! void writer()
+  {
+  	char c;
+! 	register int n;
+! 	register int bol = 1;               /* beginning of line */
+! 	register int local = 0;
+  
+  	for (;;) {
+  		n = read(0, &c, 1);
+***************
+*** 300,306 ****
+  	}
+  }
+  
+! echo(c)
+  register char c;
+  {
+  	char buf[8];
+--- 294,300 ----
+  	}
+  }
+  
+! void echo(c)
+  register char c;
+  {
+  	char buf[8];
+***************
+*** 321,327 ****
+  	write(1, buf, p - buf);
+  }
+  
+! stop(cmdc)
+  	char cmdc;
+  {
+  	mode(0);
+--- 315,321 ----
+  	write(1, buf, p - buf);
+  }
+  
+! void stop(cmdc)
+  	char cmdc;
+  {
+  	mode(0);
+***************
+*** 332,338 ****
+  	sigwinch();			/* check for size changes */
+  }
+  
+! sigwinch()
+  {
+  	struct winsize ws;
+  
+--- 326,332 ----
+  	sigwinch();			/* check for size changes */
+  }
+  
+! void sigwinch()
+  {
+  	struct winsize ws;
+  
+***************
+*** 346,352 ****
+  /*
+   * Send the window size to the server via the magic escape
+   */
+! sendwindow()
+  {
+  	char obuf[4 + sizeof (struct winsize)];
+  	struct winsize *wp = (struct winsize *)(obuf+4);
+--- 340,346 ----
+  /*
+   * Send the window size to the server via the magic escape
+   */
+! void sendwindow()
+  {
+  	char obuf[4 + sizeof (struct winsize)];
+  	struct winsize *wp = (struct winsize *)(obuf+4);
+***************
+*** 369,380 ****
+  #define	WRITING	2
+  
+  char	rcvbuf[8 * 1024];
+! int	rcvcnt;
+! int	rcvstate;
+! int	ppid;
+  jmp_buf	rcvtop;
+  
+! oob()
+  {
+  	int out = FWRITE, atmark, n;
+  	int rcvd = 0;
+--- 363,372 ----
+  #define	WRITING	2
+  
+  char	rcvbuf[8 * 1024];
+! int	rcvcnt, rcvstate, ppid;
+  jmp_buf	rcvtop;
+  
+! void oob()
+  {
+  	int out = FWRITE, atmark, n;
+  	int rcvd = 0;
+***************
+*** 466,472 ****
+  /*
+   * reader: read from remote: line -> 1
+   */
+! reader()
+  {
+  	int pid = getpid();
+  	int n, remaining;
+--- 458,464 ----
+  /*
+   * reader: read from remote: line -> 1
+   */
+! int reader()
+  {
+  	int pid = getpid();
+  	int n, remaining;
+***************
+*** 502,508 ****
+  	}
+  }
+  
+! mode(f)
+  {
+  	struct tchars *tc;
+  	struct ltchars *ltc;
+--- 494,500 ----
+  	}
+  }
+  
+! void mode(f)
+  {
+  	struct tchars *tc;
+  	struct ltchars *ltc;
+***************
+*** 543,557 ****
+  	ioctl(0, TIOCLSET, (char *)&lflags);
+  }
+  
+! /*VARARGS*/
+! prf(f, a1, a2, a3, a4, a5)
+  	char *f;
+  {
+! 	fprintf(stderr, f, a1, a2, a3, a4, a5);
+! 	fprintf(stderr, CRLF);
+  }
+  
+! lostpeer()
+  {
+  	signal(SIGPIPE, SIG_IGN);
+  	prf("\007Connection closed.");
+--- 535,547 ----
+  	ioctl(0, TIOCLSET, (char *)&lflags);
+  }
+  
+! void prf(f)
+  	char *f;
+  {
+! 	fprintf(stderr, "%s\r\n", f);
+  }
+  
+! void lostpeer()
+  {
+  	signal(SIGPIPE, SIG_IGN);
+  	prf("\007Connection closed.");
+*** ./VERSION.old	Sat Feb  8 20:08:56 2020
+--- ./VERSION	Thu Feb 27 17:41:55 2020
+***************
+*** 1,5 ****
+! Current Patch Level: 462
+! Date: February 8, 2020
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 463
+! Date: March 3, 2020
+  
+  2.11 BSD
+  ============

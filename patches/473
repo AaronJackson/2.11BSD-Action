@@ -1,0 +1,1379 @@
+Subject: compiler bugs, missing prototypes, hex format strings fixed
+Index:	 include/{signal,stdint,unistd}.h src/sys/netinet/{ip_input,ip_icmp,tcp_debug}.c src/sys/pdpif/if_il.c src/lib/c2/c21.c src/lib/ccom/{c00,c01,c03}.com src/sbin/ifconfig/ifconfig.c src/sbin/init/Makefile src/usr.sbin/uucp/uuxqt.c src/usr.sbin/sendmail/aux bbn_daemon.c src/usr.sbin/sendmail.MX/aux/bbn_daemon.c src/usr.sbin/bad144/bad144.c
+
+Description:
+Repeat-By:
+	The Description and Repeat-By sections are combined and the following
+	(lightly edited from the author's ragge@tethuvudet.se  email):
+
+Compiler- Type representation (and therefore propagation) of constants 
+          in the compiler was incorrect.
+
+           The standard specifies that octal and hexadecimial should be 
+	   represented as unsigned if they do not fit in signed types.
+
+           This patch makes expressions like
+
+	    long x, z;
+            x = z & 0xffff;
+
+           work now.  Previously it didn't AND away anything.
+
+Compiler- Hiding of typedef'd types did not work.
+
+          Expressions like:
+
+            struct foo { int b; };
+            typedef struct foo bar;
+
+            x()
+	     { char bar[10]; }
+
+          could not be compiled.
+
+System- %X in printf is specified as a hexadecimal int printing in 
+        uppercase, so change the existense of %X to %lx in the source tree
+        in preparation for correct handling of %X.
+
+Compiler-  Fix over-aggressive optimization in c2.
+
+           In some situations c2 (the optimizer) would remove moves between 
+	   integer and floating registers via memory (uncommon but did happen).
+
+Compiler- typedef'd function pointers in ANSI function headers failed to compile
+
+          This was due to a NULL pointer dereference.
+
+            typedef int (*foo)(int);
+            void bar (foo func)
+            {
+            (*func)(1);
+            }
+
+Compiler- Accept U after constants.
+
+          Previously it did not accept U appended to constants.  While fixing
+	  this rearrange the code slightly and save two core clicks of text.
+
+Headers-  Add missing defines to unistd.h as well as prototypes for the 
+          functions expected in it.
+
+          Also add a few missing pieces to signal.h and stdint.h.
+
+          The prototype addition found one missing parameter to accept() 
+	  in the uuxqt source  code :-)
+
+Misc-    Add -f to mv in the makefile when installing init, to avoid 'make 
+	 install' waiting for an answer.  An existing init.old could have 
+	 permissions that would cause 'mv' to prompt the user to allow the 
+	 operation.   Using -f avoids this problem.
+	
+Fix:
+	Cut where indicated and save to /tmp/473.patch
+
+	Then:
+
+		cd /
+		patch -p0 < /tmp/473
+
+		cd /usr/src/lib/ccom
+		make 
+		make install
+		make clean
+
+		cd /usr/src/lib/c2
+		make
+		make install
+		make clean
+
+		cd /usr/src/sbin/ifconfig
+		make
+		make install
+		make clean
+
+		cd /usr/src/usr.bin/uucp
+		make uuxqt
+		install -s -m 6110 -o uucp -g daemon uuxqt /usr/libexec
+		make clean
+
+		cd /usr/src/usr.sbin/bad144
+		make
+		make install
+		make clean
+
+	Several files in the kernel are updated by this patch but only to
+	change '%X' to '%lx' in debug / diagnostic printf() statements.  If you
+	want to recompile the kernel at this time then follow the usual
+	procedure else the patch installation is complete.
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.update.uu.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+*** ./usr/include/signal.h.old	Tue Sep  2 20:59:26 1997
+--- ./usr/include/signal.h	Fri Jan 21 14:07:37 2022
+***************
+*** 3,9 ****
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)signal.h	1.2 (2.11BSD) 1997/8/28
+   */
+  
+  #ifndef	NSIG
+--- 3,9 ----
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)signal.h	1.3 (2.11BSD) 2022/1/21
+   */
+  
+  #ifndef	NSIG
+***************
+*** 141,147 ****
+  #define sigismember(set, signo) ((*(set) & (1L << ((signo) - 1))) != 0)
+  
+  #ifndef KERNEL
+! extern long	sigblock(), sigsetmask();
+  #define	BADSIG	SIG_ERR
+  #endif
+  
+--- 141,151 ----
+  #define sigismember(set, signo) ((*(set) & (1L << ((signo) - 1))) != 0)
+  
+  #ifndef KERNEL
+! extern	char	*sys_siglist[];
+! 
+! extern	long	 sigblock(long);
+! extern	long	 sigsetmask(long);
+! 
+  #define	BADSIG	SIG_ERR
+  #endif
+  
+*** ./usr/include/stdint.h.old	Wed Jan 30 22:39:18 2002
+--- ./usr/include/stdint.h	Fri Jan 21 14:08:16 2022
+***************
+*** 1,7 ****
+  /*
+   * Public domain - 2002/1/30 - sms
+   *
+!  *	@(#)stdint.h	1.0 (2.11BSD) 2002/1/30
+  */
+  
+  #ifndef	_STDINT_H_
+--- 1,7 ----
+  /*
+   * Public domain - 2002/1/30 - sms
+   *
+!  *	@(#)stdint.h	1.1 (2.11BSD) 2022/1/21
+  */
+  
+  #ifndef	_STDINT_H_
+***************
+*** 26,29 ****
+--- 26,33 ----
+  #ifdef notyet
+  typedef uint64_t                      u_int64_t;
+  #endif
++ 
++ typedef 	 int		intptr_t;
++ typedef unsigned int		uintptr_t;
++ 
+  #endif /* _STDINT_H_ */
+*** ./usr/include/unistd.h.old	Tue Aug 17 01:14:28 1999
+--- ./usr/include/unistd.h	Fri Jan 21 14:08:41 2022
+***************
+*** 30,49 ****
+   * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+   * SUCH DAMAGE.
+   *
+!  *	@(#)unistd.h	8.10.4 (2.11BSD) 1999/5/25
+   */
+  
+- /*
+-  * Modified for 2.11BSD by removing prototypes.  To save time and space
+-  * functions not returning 'int' and functions not present in the system
+-  * are not listed.
+- */
+- 
+  #ifndef _UNISTD_H_
+  #define	_UNISTD_H_
+  
+  #include <sys/types.h>
+! /* #include <sys/unistd.h> */
+  
+  #define	 STDIN_FILENO	0	/* standard input file descriptor */
+  #define	STDOUT_FILENO	1	/* standard output file descriptor */
+--- 30,43 ----
+   * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+   * SUCH DAMAGE.
+   *
+!  *	@(#)unistd.h	8.11 (2.11BSD) 2022/1/21
+   */
+  
+  #ifndef _UNISTD_H_
+  #define	_UNISTD_H_
+  
+  #include <sys/types.h>
+! #include <stdint.h>
+  
+  #define	 STDIN_FILENO	0	/* standard input file descriptor */
+  #define	STDOUT_FILENO	1	/* standard output file descriptor */
+***************
+*** 53,94 ****
+  #define	NULL		0	/* null pointer constant */
+  #endif
+  
+! void	 _exit();
+! int	 access();
+! unsigned int	 alarm();
+! pid_t	 fork();
+! gid_t	 getegid();
+! uid_t	 geteuid();
+! gid_t	 getgid();
+! char	*getlogin();
+! pid_t	 getpgrp();
+! pid_t	 getpid();
+! pid_t	 getppid();
+! uid_t	 getuid();
+! off_t	 lseek();
+! ssize_t	 read();
+! unsigned int	 sleep();
+! char	*ttyname();
+! ssize_t	 write();
+  
+! char	*brk();
+! char	*crypt();
+! void	 endusershell();
+! long	 gethostid();
+! char	*getpass();
+! char	*getusershell();
+! char	*getwd();
+! char	*mktemp();
+! void	 psignal();
+! extern	char 	*sys_siglist[];
+! char	*re_comp();
+! char	*sbrk();
+! int	 sethostid();
+! void	 setusershell();
+! void	 sync();
+! unsigned int	 ualarm();
+! void	 usleep();
+! pid_t	 vfork();
+  
+  extern	char	*optarg;		/* getopt(3) external variables */
+  extern	int	opterr, optind, optopt;
+--- 47,132 ----
+  #define	NULL		0	/* null pointer constant */
+  #endif
+  
+! /* for lseek() */
+! #define	SEEK_SET	0
+! #define	SEEK_CUR	1
+! #define	SEEK_SET	2
+  
+! /* for access() */
+! #define F_OK	0	/* test for presence of file */
+! #define X_OK	1	/* test for execute (search) permission */
+! #define W_OK	2	/* test for write permission */
+! #define R_OK	4	/* test for read permission */
+! 
+! int	 access(const char *, int);
+! unsigned alarm(unsigned);
+! char	*brk(void *addr);
+! int	 chdir(const char *);
+! int	 chown(const char *, uid_t, gid_t);
+! int	 close(int);
+! char	*crypt(const char *, const char *);
+! int	 dup(int);
+! void	_exit(int);
+! void	 encrypt(char [64], int);
+! void	 endusershell(void);
+! int	 execl(const char *, const char *, ...);
+! int	 execle(const char *, const char *, ...);
+! int	 execlp(const char *, const char *, ...);
+! int	 execv(const char *, char *const []);
+! int	 execve(const char *, char *const [], char *const []);
+! int	 execvp(const char *, char *const []);
+! int	 fchdir(int);
+! int	 fchown(int, uid_t, gid_t);
+! int	 fchownat(int, const char *, uid_t, gid_t, int);
+! pid_t	 fork(void);
+! int	 fsync(int);
+! int	 ftruncate(int, off_t);
+! /* char	*getcwd(char *, size_t); */
+! char	*getwd(char *buf);
+! gid_t	 getegid(void);
+! uid_t	 geteuid(void);
+! gid_t	 getgid(void);
+! int	 getgroups(int, gid_t []);
+! long	 gethostid(void);
+! int	 gethostname(char *, size_t);
+! char	*getlogin(void);
+! int	 getopt(int, char * const [], const char *);
+! char	*getpass(const char *prompt);
+! /* pid_t getpgid(pid_t); */
+! pid_t	 getpgrp(void);
+! pid_t	 getpid(void);
+! pid_t	 getppid(void);
+! uid_t	 getuid(void);
+! char	*getusershell(void);
+! int	 isatty(int);
+! int	 link(const char *, const char *);
+! off_t	 lseek(int, off_t, int);
+! int	 nice(int);
+! int	 pause(void);
+! int	 pipe(int [2]);
+! ssize_t	 read(int, void *, size_t);
+! int	 rmdir(const char *);
+! char	*sbrk(intptr_t incr);
+! int	 setegid(gid_t);
+! int	 seteuid(uid_t);
+! int	 setgid(gid_t);
+! int	 sethostid(long);
+! int	 setpgrp(); /* XXX FIXME not correct */
+! int	 setregid(gid_t, gid_t);
+! int	 setreuid(uid_t, uid_t);
+! int	 setuid(uid_t);
+! void	 setusershell(void);
+! unsigned sleep(unsigned);
+! void	 swab(const void *restrict, void *restrict, ssize_t);
+! int	 symlink(const char *, const char *);
+! void	 sync(void);
+! int	 truncate(const char *, off_t);
+! char	*ttyname(int);
+! unsigned ualarm(unsigned, unsigned);
+! int	 unlink(const char *);
+! void	 usleep(unsigned);
+! pid_t	 vfork(void);
+! ssize_t	 write(int, const void *, size_t);
+  
+  extern	char	*optarg;		/* getopt(3) external variables */
+  extern	int	opterr, optind, optopt;
+*** ./usr/src/sys/netinet/ip_input.c.old	Wed Oct 11 21:51:53 1995
+--- ./usr/src/sys/netinet/ip_input.c	Fri Jan 21 14:18:34 2022
+***************
+*** 9,15 ****
+   * software without specific prior written permission. This software
+   * is provided ``as is'' without express or implied warranty.
+   *
+!  *	@(#)ip_input.c	7.9.2 (2.11BSD GTE) 1995/10/09
+   */
+  
+  #include "param.h"
+--- 9,15 ----
+   * software without specific prior written permission. This software
+   * is provided ``as is'' without express or implied warranty.
+   *
+!  *	@(#)ip_input.c	7.10 (2.11BSD) 2022/1/21
+   */
+  
+  #include "param.h"
+***************
+*** 863,869 ****
+  
+  	dest.s_addr = 0;
+  	if (ipprintfs)
+! 		printf("forward: src %X dst %X ttl %x\n", ntohl(ip->ip_src),
+  			ntohl(ip->ip_dst), ip->ip_ttl);
+  	ip->ip_id = htons(ip->ip_id);
+  	if (in_canforward(ip->ip_dst) == 0) {
+--- 863,869 ----
+  
+  	dest.s_addr = 0;
+  	if (ipprintfs)
+! 		printf("forward: src %lx dst %lx ttl %x\n", ntohl(ip->ip_src),
+  			ntohl(ip->ip_dst), ip->ip_ttl);
+  	ip->ip_id = htons(ip->ip_id);
+  	if (in_canforward(ip->ip_dst) == 0) {
+*** ./usr/src/sys/netinet/ip_icmp.c.old	Wed Oct 11 00:45:29 1995
+--- ./usr/src/sys/netinet/ip_icmp.c	Fri Jan 21 14:09:31 2022
+***************
+*** 9,15 ****
+   * software without specific prior written permission. This software
+   * is provided ``as is'' without express or implied warranty.
+   *
+!  *	@(#)ip_icmp.c	7.7.2 (2.11BSD GTE) 1995/10/10
+   */
+  
+  #include "param.h"
+--- 9,15 ----
+   * software without specific prior written permission. This software
+   * is provided ``as is'' without express or implied warranty.
+   *
+!  *	@(#)ip_icmp.c	7.8 (2.11BSD) 2022/1/21
+   */
+  
+  #include "param.h"
+***************
+*** 153,159 ****
+  	 */
+  #ifdef ICMPPRINTFS
+  	if (icmpprintfs)
+! 		printf("icmp_input src %X len %d", ntohl(ip->ip_src), icmplen);
+  #endif
+  	if (icmplen < ICMP_MINLEN) {
+  		icmpstat.icps_tooshort++;
+--- 153,159 ----
+  	 */
+  #ifdef ICMPPRINTFS
+  	if (icmpprintfs)
+! 		printf("icmp_input src %lx len %d", ntohl(ip->ip_src), icmplen);
+  #endif
+  	if (icmplen < ICMP_MINLEN) {
+  		icmpstat.icps_tooshort++;
+***************
+*** 304,310 ****
+  		icmpdst.sin_addr = icp->icmp_gwaddr;
+  #ifdef	ICMPPRINTFS
+  		if (icmpprintfs)
+! 			printf("redirect dst %X to %X\n", ntohl(icp->icmp_ip.ip_dst),
+  				ntohl(icp->icmp_gwaddr));
+  #endif
+  		if (code == ICMP_REDIRECT_NET || code == ICMP_REDIRECT_TOSNET) {
+--- 304,310 ----
+  		icmpdst.sin_addr = icp->icmp_gwaddr;
+  #ifdef	ICMPPRINTFS
+  		if (icmpprintfs)
+! 			printf("redirect dst %lx to %lx\n", ntohl(icp->icmp_ip.ip_dst),
+  				ntohl(icp->icmp_gwaddr));
+  #endif
+  		if (code == ICMP_REDIRECT_NET || code == ICMP_REDIRECT_TOSNET) {
+***************
+*** 433,439 ****
+  	m->m_len += hlen;
+  #ifdef ICMPPRINTFS
+  	if (icmpprintfs)
+! 		printf("icmp_send dst %X src %X\n", ntohl(ip->ip_dst.s_addr), ntohl(ip->ip_src.s_addr));
+  #endif
+  	(void) ip_output(m, opts, (struct route *)0, 0);
+  }
+--- 433,439 ----
+  	m->m_len += hlen;
+  #ifdef ICMPPRINTFS
+  	if (icmpprintfs)
+! 		printf("icmp_send dst %lx src %lx\n", ntohl(ip->ip_dst.s_addr), ntohl(ip->ip_src.s_addr));
+  #endif
+  	(void) ip_output(m, opts, (struct route *)0, 0);
+  }
+*** ./usr/src/sys/netinet/tcp_debug.c.old	Tue Jan  7 21:52:17 2020
+--- ./usr/src/sys/netinet/tcp_debug.c	Fri Jan 21 14:09:57 2022
+***************
+*** 9,15 ****
+   * software without specific prior written permission. This software
+   * is provided ``as is'' without express or implied warranty.
+   *
+!  *	@(#)tcp_debug.c	7.3 (2.11BSD) 2020/1/7
+   */
+  
+  #ifdef	TCPDEBUG
+--- 9,15 ----
+   * software without specific prior written permission. This software
+   * is provided ``as is'' without express or implied warranty.
+   *
+!  *	@(#)tcp_debug.c	7.4 (2.11BSD) 2022/1/21
+   */
+  
+  #ifdef	TCPDEBUG
+***************
+*** 102,111 ****
+  		if (act == TA_OUTPUT)
+  			len -= sizeof (struct tcphdr);
+  		if (len)
+! 			printf("[%X..%X)", seq, seq+len);
+  		else
+! 			printf("%X", seq);
+! 		printf("@%X, urp=%X", ack, ti->ti_urp);
+  		flags = ti->ti_flags;
+  		if (flags) {
+  #ifndef lint
+--- 102,111 ----
+  		if (act == TA_OUTPUT)
+  			len -= sizeof (struct tcphdr);
+  		if (len)
+! 			printf("[%lx..%lx)", seq, seq+len);
+  		else
+! 			printf("%lx", seq);
+! 		printf("@%lx, urp=%lx", ack, ti->ti_urp);
+  		flags = ti->ti_flags;
+  		if (flags) {
+  #ifndef lint
+***************
+*** 129,138 ****
+  	printf("\n");
+  	if (tp == 0)
+  		return;
+! 	printf("\trcv_(nxt,wnd,up) (%X,%x,%x) snd_(una,nxt,max) (%X,%X,%X)\n",
+  	    tp->rcv_nxt, tp->rcv_wnd, tp->rcv_up, tp->snd_una, tp->snd_nxt,
+  	    tp->snd_max);
+! 	printf("\tsnd_(wl1,wl2,wnd) (%X,%X,%x)\n",
+  	    tp->snd_wl1, tp->snd_wl2, tp->snd_wnd);
+  #endif /* TCPDEBUG */
+  }
+--- 129,138 ----
+  	printf("\n");
+  	if (tp == 0)
+  		return;
+! 	printf("\trcv_(nxt,wnd,up) (%lx,%x,%x) snd_(una,nxt,max) (%lx,%lx,%lx)\n",
+  	    tp->rcv_nxt, tp->rcv_wnd, tp->rcv_up, tp->snd_una, tp->snd_nxt,
+  	    tp->snd_max);
+! 	printf("\tsnd_(wl1,wl2,wnd) (%lx,%lx,%x)\n",
+  	    tp->snd_wl1, tp->snd_wl2, tp->snd_wnd);
+  #endif /* TCPDEBUG */
+  }
+*** ./usr/src/sys/pdpif/if_il.c.old	Tue Jan  7 22:13:35 2020
+--- ./usr/src/sys/pdpif/if_il.c	Fri Jan 21 14:10:13 2022
+***************
+*** 3,9 ****
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)if_il.c	2.3 (2.11BSD) 2020/1/7
+   *
+   *	1/6/95 - sms: start of network data was already computed in sys_net.c,
+   *		it should no longer be done in this driver.  Using 'startnet'
+--- 3,9 ----
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)if_il.c	2.4 (2.11BSD) 2022/1/21
+   *
+   *	1/6/95 - sms: start of network data was already computed in sys_net.c,
+   *		it should no longer be done in this driver.  Using 'startnet'
+***************
+*** 704,710 ****
+  	register struct il_softc *is = &il_softc[ifp->if_unit];
+  	int s = splimp(), error = 0;
+  
+! /*	printf("\tilioctl new:%X\n", ntohl(IA_SIN(ifa)->sin_addr.s_addr));*/
+  	switch (cmd) {
+  
+  	case SIOCSIFADDR:
+--- 704,710 ----
+  	register struct il_softc *is = &il_softc[ifp->if_unit];
+  	int s = splimp(), error = 0;
+  
+! /*	printf("\tilioctl new:%lx\n", ntohl(IA_SIN(ifa)->sin_addr.s_addr));*/
+  	switch (cmd) {
+  
+  	case SIOCSIFADDR:
+*** ./usr/src/lib/c2/c21.c.old	Sun Jan  2 17:09:56 1994
+--- ./usr/src/lib/c2/c21.c	Fri Jan 21 14:12:13 2022
+***************
+*** 1,6 ****
+--- 1,8 ----
+  #
+  /*
+   * C object code improver-- second part
++  *
++  *      @(#) c21.c 2.0  (2.11BSD) 2022/1/21
+   */
+  
+  #include "c2.h"
+***************
+*** 654,660 ****
+  			regs[i][0] = 0;
+  	if (equstr(s, conloc))
+  		conloc[0] = '\0';
+! 	while ((i = findrand(s, flt)) >= 0)
+  		regs[i][0] = 0;
+  	while (*s) {
+  		if ((*s=='(' && (*(s+1)!='r' || *(s+2)!='5')) || *s++=='*') {
+--- 656,669 ----
+  			regs[i][0] = 0;
+  	if (equstr(s, conloc))
+  		conloc[0] = '\0';
+! 	/*
+! 	 * Type casting between float and int may end up removing
+! 	 * non-redundant moves. This is OK if supporting strict aliasing,
+! 	 * but this compiler is about 40 year too old.
+! 	 */
+! 	while ((i = findrand(s, 0)) >= 0)
+! 		regs[i][0] = 0;
+! 	while ((i = findrand(s, NREG)) >= 0)
+  		regs[i][0] = 0;
+  	while (*s) {
+  		if ((*s=='(' && (*(s+1)!='r' || *(s+2)!='5')) || *s++=='*') {
+*** ./usr/src/lib/ccom/c00.c.old	Tue Jan  7 13:21:32 2020
+--- ./usr/src/lib/ccom/c00.c	Fri Jan 21 14:12:57 2022
+***************
+*** 7,13 ****
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static	char	sccsid[] = "@(#)c00.c	2.2 (2.11BSD) 2020/1/7";
+  #endif
+  
+  #include "c0.h"
+--- 7,13 ----
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static	char	sccsid[] = "@(#)c00.c	2.3 (2.11BSD) 2022/1/21";
+  #endif
+  
+  #include "c0.h"
+***************
+*** 16,21 ****
+--- 16,22 ----
+  int	peeksym	= -1;
+  int	line	= 1;
+  struct	tnode	funcblk = { NAME };
++ static	int uns;
+  
+  struct kwtab {
+  	char	*kwname;
+***************
+*** 192,198 ****
+--- 193,205 ----
+  	return(0);
+  }
+  
++ static int
++ getc00()
++ {
++ 	return getchar();
++ }
+  
++ 
+  /*
+   * Return the next symbol from the input.
+   * peeksym is a pushed-back symbol, peekc is a pushed-back
+***************
+*** 220,226 ****
+  		if (eof)
+  			return(EOFC);
+  		else
+! 			c = getchar();
+  loop:
+  	if (c==EOF) {
+  		eof++;
+--- 227,233 ----
+  		if (eof)
+  			return(EOFC);
+  		else
+! 			c = getc00();
+  loop:
+  	if (c==EOF) {
+  		eof++;
+***************
+*** 235,253 ****
+  		}
+  		tline = cval;
+  		while (ctab[peekc]==SPACE)
+! 			peekc = getchar();
+  		if (peekc=='"') {
+  			sp = filename;
+  			while ((c = mapch('"')) >= 0)
+  				*sp++ = c;
+  			*sp++ = 0;
+! 			peekc = getchar();
+  		}
+  		if (peekc != '\n') {
+  #ifdef notdef
+  			error("Illegal #");
+  #endif
+! 			while (getchar()!='\n' && eof==0)
+  				;
+  		}
+  		peekc = 0;
+--- 242,260 ----
+  		}
+  		tline = cval;
+  		while (ctab[peekc]==SPACE)
+! 			peekc = getc00();
+  		if (peekc=='"') {
+  			sp = filename;
+  			while ((c = mapch('"')) >= 0)
+  				*sp++ = c;
+  			*sp++ = 0;
+! 			peekc = getc00();
+  		}
+  		if (peekc != '\n') {
+  #ifdef notdef
+  			error("Illegal #");
+  #endif
+! 			while (getc00()!='\n' && eof==0)
+  				;
+  		}
+  		peekc = 0;
+***************
+*** 258,264 ****
+  		line++;
+  
+  	case SPACE:
+! 		c = getchar();
+  		goto loop;
+  
+  	case PLUS:
+--- 265,271 ----
+  		line++;
+  
+  	case SPACE:
+! 		c = getc00();
+  		goto loop;
+  
+  	case PLUS:
+***************
+*** 300,306 ****
+  			if (c=='*') {
+  				if (spnextchar() == '/') {
+  					peekc = 0;
+! 					c = getchar();
+  					goto loop;
+  				}
+  			}
+--- 307,313 ----
+  			if (c=='*') {
+  				if (spnextchar() == '/') {
+  					peekc = 0;
+! 					c = getc00();
+  					goto loop;
+  				}
+  			}
+***************
+*** 310,317 ****
+  		return(0);
+  
+  	case PERIOD:
+! 		if ((c = getchar()) == '.') {
+! 			if ((c = getchar()) == '.')
+  				return ELLIPS;
+  			error("Too many '.'");
+  		} else {
+--- 317,324 ----
+  		return(0);
+  
+  	case PERIOD:
+! 		if ((c = getc00()) == '.') {
+! 			if ((c = getc00()) == '.')
+  				return ELLIPS;
+  			error("Too many '.'");
+  		} else {
+***************
+*** 335,341 ****
+  		while (ctab[c]==LETTER || ctab[c]==DIGIT) {
+  			if (sp < symbuf + MAXCPS)
+  				*sp++ = c;
+! 			c = getchar();
+  		}
+  		*sp++ = '\0';
+  		mossym = mosflg;
+--- 342,348 ----
+  		while (ctab[c]==LETTER || ctab[c]==DIGIT) {
+  			if (sp < symbuf + MAXCPS)
+  				*sp++ = c;
+! 			c = getc00();
+  		}
+  		*sp++ = '\0';
+  		mossym = mosflg;
+***************
+*** 354,360 ****
+  	case UNKN:
+  	unkn:
+  		error("Unknown character");
+! 		c = getchar();
+  		goto loop;
+  
+  	}
+--- 361,367 ----
+  	case UNKN:
+  	unkn:
+  		error("Unknown character");
+! 		c = getc00();
+  		goto loop;
+  
+  	}
+***************
+*** 361,390 ****
+  	return(ctab[c]);
+  }
+  
+  /*
+   * Read a number.  Return kind.
+   */
+  getnum()
+  {
+! 	register char *np;
+! 	register c, base;
+  	int expseen, sym, ndigit;
+  	char *nsyn;
+! 	int maxdigit;
+  
+  	nsyn = "Number syntax";
+- 	lcval = 0;
+  	base = 10;
+  	maxdigit = 0;
+  	np = numbuf;
+  	ndigit = 0;
+  	sym = CON;
+! 	expseen = 0;
+! 	if ((c=spnextchar()) == '0')
+  		base = 8;
+! 	for (;; c = getchar()) {
+  		*np++ = c;
+! 		if (ctab[c]==DIGIT || (base==16) && ('a'<=c&&c<='f'||'A'<=c&&c<='F')) {
+  			if (base==8)
+  				lcval <<= 3;
+  			else if (base==10)
+--- 368,403 ----
+  	return(ctab[c]);
+  }
+  
++ /* match correct type */
++ #define	GT_INT	0
++ #define	GT_UNS	1
++ #define	GT_LNG	2
++ #define	GT_ULNG	3
+  /*
+   * Read a number.  Return kind.
+   */
+  getnum()
+  {
+! 	register c, lc, base;
+! 	char *np;
+  	int expseen, sym, ndigit;
+  	char *nsyn;
+! 	int maxdigit, typ;
+  
+  	nsyn = "Number syntax";
+  	base = 10;
+  	maxdigit = 0;
+  	np = numbuf;
+  	ndigit = 0;
+  	sym = CON;
+! 	typ = expseen = 0;
+! 	lcval = 0;
+! 	if ((lc = c=spnextchar()) == '0')
+  		base = 8;
+! 	for (;; lc = c = getc00()) {
+! 		lc |= 040; /* make lowercase */
+  		*np++ = c;
+! 		if (ctab[c]==DIGIT || (base==16) && ('a' <= lc && lc <= 'f')) {
+  			if (base==8)
+  				lcval <<= 3;
+  			else if (base==10)
+***************
+*** 392,406 ****
+  			else
+  				lcval <<= 4;
+  			if (ctab[c]==DIGIT)
+! 				c -= '0';
+! 			else if (c>='a')
+! 				c -= 'a'-10;
+! 			else
+! 				c -= 'A'-10;
+! 			lcval += c;
+  			ndigit++;
+! 			if (c>maxdigit)
+! 				maxdigit = c;
+  			continue;
+  		}
+  		if (c=='.') {
+--- 405,417 ----
+  			else
+  				lcval <<= 4;
+  			if (ctab[c]==DIGIT)
+! 				lc -= '0';
+! 			else if (lc >= 'a')
+! 				lc -= 'a'-10;
+! 			lcval += lc;
+  			ndigit++;
+! 			if (lc>maxdigit)
+! 				maxdigit = lc;
+  			continue;
+  		}
+  		if (c=='.') {
+***************
+*** 414,435 ****
+  			sym = DOT;
+  			break;
+  		}
+! 		if ((c=='e'||c=='E') && expseen==0) {
+  			expseen++;
+  			sym = FCON;
+  			if (base==16 || maxdigit>=10)
+  				error(nsyn);
+  			base = 10;
+! 			*np++ = c = getchar();
+  			if (c!='+' && c!='-' && ctab[c]!=DIGIT)
+  				break;
+! 		} else if (c=='x' || c=='X') {
+  			if (base!=8 || lcval!=0 || sym!=CON)
+  				error(nsyn);
+  			base = 16;
+! 		} else if ((c=='l' || c=='L') && sym==CON) {
+! 			c = getchar();
+! 			sym = LCON;
+  			break;
+  		} else
+  			break;
+--- 425,450 ----
+  			sym = DOT;
+  			break;
+  		}
+! 		if ((lc == 'e') && expseen==0) {
+  			expseen++;
+  			sym = FCON;
+  			if (base==16 || maxdigit>=10)
+  				error(nsyn);
+  			base = 10;
+! 			*np++ = lc = c = getc00();
+  			if (c!='+' && c!='-' && ctab[c]!=DIGIT)
+  				break;
+! 		} else if (lc == 'x') {
+  			if (base!=8 || lcval!=0 || sym!=CON)
+  				error(nsyn);
+  			base = 16;
+! 		} else if (lc == 'l' || lc == 'u') {
+! 			do {
+! 				if (lc == 'l') typ |= GT_LNG;
+! 				if (lc == 'u') typ |= GT_UNS;
+! 				c = lc = getc00();
+! 				lc |= 040;
+! 			} while (lc == 'l' || lc == 'u');
+  			break;
+  		} else
+  			break;
+***************
+*** 442,450 ****
+  		cval = np-numbuf;
+  		return(FCON);
+  	}
+! 	if (sym==CON && (lcval<0 || lcval>MAXINT&&base==10 || (lcval>>1)>MAXINT)) {
+! 		sym = LCON;
+! 	}
+  	cval = lcval;
+  	return(sym);
+  }
+--- 457,478 ----
+  		cval = np-numbuf;
+  		return(FCON);
+  	}
+! 	if ((typ & GT_UNS) == 0) {
+! 		if (base == 10) {
+! 			if ((unsigned long)lcval > MAXINT)
+! 				typ = GT_LNG;
+! 		} else {
+! 			if (lcval < 0)
+! 				typ = GT_ULNG;
+! 			else if ((lcval >> 1) > MAXINT)
+! 				typ = GT_LNG;
+! 			else if (lcval > MAXINT)
+! 				typ = GT_UNS;
+! 		}
+! 	} else if ((typ == GT_UNS) && ((lcval >> 1) > MAXINT))
+! 		typ = GT_ULNG;
+! 	if (typ & GT_LNG) sym = LCON;
+! 	uns = typ & GT_UNS;
+  	cval = lcval;
+  	return(sym);
+  }
+***************
+*** 552,558 ****
+  	if (a = mpeek)
+  		mpeek = 0;
+  	else
+! 		a = getchar();
+  loop:
+  	if (a==c)
+  		return(-1);
+--- 580,586 ----
+  	if (a = mpeek)
+  		mpeek = 0;
+  	else
+! 		a = getc00();
+  loop:
+  	if (a==c)
+  		return(-1);
+***************
+*** 565,571 ****
+  		return(-1);
+  
+  	case '\\':
+! 		switch (a=getchar()) {
+  
+  		case 't':
+  			return('\t');
+--- 593,599 ----
+  		return(-1);
+  
+  	case '\\':
+! 		switch (a=getc00()) {
+  
+  		case 't':
+  			return('\t');
+***************
+*** 589,595 ****
+  			while (++c<=3 && '0'<=a && a<='7') {
+  				n <<= 3;
+  				n += a-'0';
+! 				a = getchar();
+  			}
+  			mpeek = a;
+  			return(n);
+--- 617,623 ----
+  			while (++c<=3 && '0'<=a && a<='7') {
+  				n <<= 3;
+  				n += a-'0';
+! 				a = getc00();
+  			}
+  			mpeek = a;
+  			return(n);
+***************
+*** 599,605 ****
+  
+  		case '\n':
+  			line++;
+! 			a = getchar();
+  			goto loop;
+  		}
+  	}
+--- 627,633 ----
+  
+  		case '\n':
+  			line++;
+! 			a = getc00();
+  			goto loop;
+  		}
+  	}
+***************
+*** 663,675 ****
+  	case LCON:
+  		*cp = (union tree *)Tblock(sizeof(struct lnode));
+  		(*cp)->l.op = LCON;
+! 		(*cp)->l.type = LONG;
+  		(*cp)->l.lvalue = lcval;
+  		cp++;
+  		goto tand;
+  
+  	case CON:
+! 		*cp++ = cblock(cval);
+  		goto tand;
+  
+  	/* fake a static char array */
+--- 691,708 ----
+  	case LCON:
+  		*cp = (union tree *)Tblock(sizeof(struct lnode));
+  		(*cp)->l.op = LCON;
+! 		(*cp)->l.type = uns ? UNLONG : LONG;
+  		(*cp)->l.lvalue = lcval;
+  		cp++;
++ 		uns = 0;
+  		goto tand;
+  
+  	case CON:
+! 		*cp = cblock(cval);
+! 		if (uns)
+! 			(*cp)->c.type = UNSIGN;
+! 		uns = 0;
+! 		*cp++;
+  		goto tand;
+  
+  	/* fake a static char array */
+*** ./usr/src/lib/ccom/c01.c.old	Tue Jan  7 13:21:55 2020
+--- ./usr/src/lib/ccom/c01.c	Fri Jan 21 14:13:17 2022
+***************
+*** 3,9 ****
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static	char	sccsid[] = "@(#)c01.c	2.0 (2.11BSD) 2020/1/7";
+  #endif
+  
+  #include "c0.h"
+--- 3,9 ----
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static	char	sccsid[] = "@(#)c01.c	2.1 (2.11BSD) 2022/1/21";
+  #endif
+  
+  #include "c0.h"
+***************
+*** 141,147 ****
+  		}
+  		if ((t1&XTYPE) != FUNC)
+  			error("Call of non-function");
+! 		p2 = protochk(p1->t.subsp[0], p2);
+  		*cp++ = block(CALL,decref(t1),p1->t.subsp+1,p1->t.strp,p1,p2);
+  		return;
+  
+--- 141,148 ----
+  		}
+  		if ((t1&XTYPE) != FUNC)
+  			error("Call of non-function");
+! 		if (p1->t.subsp)
+! 			p2 = protochk(p1->t.subsp[0], p2);
+  		*cp++ = block(CALL,decref(t1),p1->t.subsp+1,p1->t.strp,p1,p2);
+  		return;
+  
+*** ./usr/src/lib/ccom/c03.c.old	Mon Mar  9 20:05:10 2020
+--- ./usr/src/lib/ccom/c03.c	Fri Jan 21 14:13:33 2022
+***************
+*** 6,12 ****
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static	char	sccsid[] = "@(#)c03.c	2.0 (2.11BSD) 2020/1/7";
+  #endif
+  #include "c0.h"
+  
+--- 6,12 ----
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static	char	sccsid[] = "@(#)c03.c	2.1 (2.11BSD) 2022/1/21";
+  #endif
+  #include "c0.h"
+  
+***************
+*** 51,59 ****
+  	for (;;) {
+  		mosflg = isadecl? ismos: 0;
+  		o = symbol();
+! 		if (o==NAME && csym->hclass==TYPEDEF) {
+! 			if (tkw >= 0)
+! 				error("type clash");
+  			tkw = csym->htype;
+  			tptr->hsubsp = csym->hsubsp;
+  			tptr->hstrp = csym->hstrp;
+--- 51,57 ----
+  	for (;;) {
+  		mosflg = isadecl? ismos: 0;
+  		o = symbol();
+! 		if (o==NAME && csym->hclass==TYPEDEF && tkw < 0) {
+  			tkw = csym->htype;
+  			tptr->hsubsp = csym->hsubsp;
+  			tptr->hstrp = csym->hstrp;
+*** ./usr/src/sbin/ifconfig/ifconfig.c.old	Mon Jan 10 23:55:19 1994
+--- ./usr/src/sbin/ifconfig/ifconfig.c	Fri Jan 21 14:14:03 2022
+***************
+*** 9,15 ****
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)ifconfig.c	4.20.1 (2.11BSD GTE) 1/1/94";
+  #endif
+  
+  #include <sys/types.h>
+--- 9,15 ----
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)ifconfig.c	4.21 (2.11BSD) 2022/1/21";
+  #endif
+  
+  #include <sys/types.h>
+***************
+*** 342,348 ****
+  		sin = (struct sockaddr_in *)&ifr.ifr_dstaddr;
+  		printf("--> %s ", inet_ntoa(sin->sin_addr));
+  	}
+! 	printf("netmask %X ", ntohl(netmask.sin_addr.s_addr));
+  	if (flags & IFF_BROADCAST) {
+  		if (ioctl(s, SIOCGIFBRDADDR, (caddr_t)&ifr) < 0) {
+  			if (errno == EADDRNOTAVAIL)
+--- 342,348 ----
+  		sin = (struct sockaddr_in *)&ifr.ifr_dstaddr;
+  		printf("--> %s ", inet_ntoa(sin->sin_addr));
+  	}
+! 	printf("netmask 0x%lx ", ntohl(netmask.sin_addr.s_addr));
+  	if (flags & IFF_BROADCAST) {
+  		if (ioctl(s, SIOCGIFBRDADDR, (caddr_t)&ifr) < 0) {
+  			if (errno == EADDRNOTAVAIL)
+*** ./usr/src/sbin/init/Makefile.old	Fri Jan 10 21:56:01 1997
+--- ./usr/src/sbin/init/Makefile	Fri Jan 21 14:14:25 2022
+***************
+*** 1,7 ****
+  #
+  # Public Domain.  1997/1/10 - Steven Schultz
+  #
+! #	@(#)Makefile	1.0 (2.11BSD) 1997/1/10
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+--- 1,7 ----
+  #
+  # Public Domain.  1997/1/10 - Steven Schultz
+  #
+! #	@(#)Makefile	1.1 (2.11BSD) 2022/1/21
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+***************
+*** 26,32 ****
+  
+  install: init
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+! 	-mv /etc/init /etc/init.old
+  	install -s -o root -g bin -m 700 init ${DESTDIR}/etc/init
+  
+  lint: ${SRCS}
+--- 26,32 ----
+  
+  install: init
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+! 	-mv -f /etc/init /etc/init.old
+  	install -s -o root -g bin -m 700 init ${DESTDIR}/etc/init
+  
+  lint: ${SRCS}
+*** ./usr/src/usr.bin/uucp/uuxqt.c.old	Fri Oct  3 02:12:49 1997
+--- ./usr/src/usr.bin/uucp/uuxqt.c	Fri Jan 21 14:14:47 2022
+***************
+*** 1,5 ****
+  #if	!defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)uuxqt.c	5.8.1 (2.11BSD) 1997/10/2";
+  #endif
+  
+  #include "uucp.h"
+--- 1,5 ----
+  #if	!defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)uuxqt.c	5.9 (2.11BSD) 2022/1/21";
+  #endif
+  
+  #include "uucp.h"
+***************
+*** 181,187 ****
+  	while (gtxfile(xfile) > 0) {
+  		/* if /etc/nologin exists, exit cleanly */
+  #if defined(BSD4_2) || defined(USG)
+! 		if (access(NOLOGIN) == 0) {
+  #else !BSD4_2 && ! USG
+  		ultouch();
+  		if (nologinflag) {
+--- 181,187 ----
+  	while (gtxfile(xfile) > 0) {
+  		/* if /etc/nologin exists, exit cleanly */
+  #if defined(BSD4_2) || defined(USG)
+! 		if (access(NOLOGIN, F_OK) == 0) {
+  #else !BSD4_2 && ! USG
+  		ultouch();
+  		if (nologinflag) {
+*** ./usr/src/usr.sbin/sendmail/aux/bbn_daemon.c.old	Wed Feb 18 03:11:10 1987
+--- ./usr/src/usr.sbin/sendmail/aux/bbn_daemon.c	Fri Jan 21 14:15:30 2022
+***************
+*** 2,10 ****
+  # include "sendmail.h"
+  
+  #ifndef DAEMON
+! SCCSID(@(#)bbn_daemon.c	3.36+		12/13/82	(w/o daemon mode));
+  #else
+! SCCSID(@(#)bbn_daemon.c	3.36+		12/13/82	(w/ daemon mode));
+  
+  /*
+  **  DAEMON.C -- routines to use when running as a daemon.
+--- 2,10 ----
+  # include "sendmail.h"
+  
+  #ifndef DAEMON
+! SCCSID(@(#)bbn_daemon.c	3.37		2022/1/21	(w/o daemon mode));
+  #else
+! SCCSID(@(#)bbn_daemon.c	3.37		2022/1/21	(w/ daemon mode));
+  
+  /*
+  **  DAEMON.C -- routines to use when running as a daemon.
+***************
+*** 241,247 ****
+  
+  # ifdef DEBUG
+  	if (tTd(16, 1))
+! 		printf("makeconnection(%s=%X)\n", host, openparams.c_fcon._na_l);
+  # endif DEBUG
+  
+  	s = open("/dev/net/net", &openparams);
+--- 241,247 ----
+  
+  # ifdef DEBUG
+  	if (tTd(16, 1))
+! 		printf("makeconnection(%s=%lx)\n", host, openparams.c_fcon._na_l);
+  # endif DEBUG
+  
+  	s = open("/dev/net/net", &openparams);
+*** ./usr/src/usr.sbin/sendmail.MX/aux/bbn_daemon.c.old	Wed Jul 13 12:30:34 1983
+--- ./usr/src/usr.sbin/sendmail.MX/aux/bbn_daemon.c	Fri Jan 21 14:15:55 2022
+***************
+*** 2,10 ****
+  # include "sendmail.h"
+  
+  #ifndef DAEMON
+! SCCSID(@(#)bbn_daemon.c	3.36+		12/13/82	(w/o daemon mode));
+  #else
+! SCCSID(@(#)bbn_daemon.c	3.36+		12/13/82	(w/ daemon mode));
+  
+  /*
+  **  DAEMON.C -- routines to use when running as a daemon.
+--- 2,10 ----
+  # include "sendmail.h"
+  
+  #ifndef DAEMON
+! SCCSID(@(#)bbn_daemon.c	3.37		2022/1/21	(w/o daemon mode));
+  #else
+! SCCSID(@(#)bbn_daemon.c	3.37		2022/1/21	(w/ daemon mode));
+  
+  /*
+  **  DAEMON.C -- routines to use when running as a daemon.
+***************
+*** 241,247 ****
+  
+  # ifdef DEBUG
+  	if (tTd(16, 1))
+! 		printf("makeconnection(%s=%X)\n", host, openparams.c_fcon._na_l);
+  # endif DEBUG
+  
+  	s = open("/dev/net/net", &openparams);
+--- 241,247 ----
+  
+  # ifdef DEBUG
+  	if (tTd(16, 1))
+! 		printf("makeconnection(%s=%lx)\n", host, openparams.c_fcon._na_l);
+  # endif DEBUG
+  
+  	s = open("/dev/net/net", &openparams);
+*** ./usr/src/usr.sbin/bad144/bad144.c.old	Sat Jan 21 19:43:41 1995
+--- ./usr/src/usr.sbin/bad144/bad144.c	Fri Jan 21 14:17:48 2022
+***************
+*** 1,3 ****
+--- 1,6 ----
++ #if     !defined(lint) && defined(DOSCCS)
++ static char *sccsid = "@(#)bad144.c 1.2 (2.11BSD) 2022/1/21";
++ #endif
+  /*
+   * bad144
+   *
+***************
+*** 96,102 ****
+  			exit(1);
+  		}
+  		lseek(f, 512 * (di->di_size - di->di_nsect), 0);
+! 		printf("bad block information at 0x%X in %s:\n",
+  		    lseek(f,0L,1), name);
+  		if (read(f, &dkbad, 512) != 512) {
+  			fprintf(stderr, "%s: can't read bad block info (wrong type disk?)\n", name);
+--- 99,105 ----
+  			exit(1);
+  		}
+  		lseek(f, 512 * (di->di_size - di->di_nsect), 0);
+! 		printf("bad block information at 0x%lx in %s:\n",
+  		    lseek(f,0L,1), name);
+  		if (read(f, &dkbad, 512) != 512) {
+  			fprintf(stderr, "%s: can't read bad block info (wrong type disk?)\n", name);
+*** ./VERSION.old	Sun Sep 19 07:36:43 2021
+--- ./VERSION	Thu Jan 20 06:27:47 2022
+***************
+*** 1,5 ****
+! Current Patch Level: 472
+! Date: September 19, 2021
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 473
+! Date: January 20, 2022
+  
+  2.11 BSD
+  ============

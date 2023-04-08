@@ -1,0 +1,617 @@
+Subject: at(1) Y2K and leap year bugs
+Index:	 src/usr.bin/at/{at.c,atq.c,atrm.c,atrun.c}, src/man/man1/at.1
+
+Description:
+	at(1) has several Y2K bugs as well as an error in the leap year check.
+
+Repeat-By:
+	Observation.  Note the missing "+1900" with two digit (%2d) rather than
+	four (%4d) year format strings.   The leap leap year calculation use
+	of %100 rather than  %400 is obvious after it has been pointed out ;)
+	
+Fix:
+
+	Cut where indicated and save to /tmp/472.patch
+
+	Then:
+
+cd /
+patch -p0 < /tmp/472.patch
+cd /usr/src/usr.bin/at
+make install
+make clean
+
+cd /usr/src/man/man1
+/usr/man/manroff at.1 > at.0
+install -o bin -g bin -m 444 at.0 /usr/man/cat1/at.0
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.update.uu.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+*** ./usr/src/man/man1/at.1.old	Mon Oct 21 23:52:40 1996
+--- ./usr/src/man/man1/at.1	Sun Sep 19 07:36:12 2021
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)at.1	6.2.1 (2.11BSD) 1996/10/21
+  .\"
+! .TH AT 1 "October 21, 1996"
+  .UC 4
+  .SH NAME
+  at \- execute commands at a later time
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)at.1	6.2.2 (2.11BSD) 2021/9/18
+  .\"
+! .TH AT 1 "September 18, 2021"
+  .UC 4
+  .SH NAME
+  at \- execute commands at a later time
+***************
+*** 102,112 ****
+  .IR mail (1).
+  .SH FILES
+  .nf
+! /usr/spool/at                spooling area
+! /usr/spool/at/yy.ddd.hhhh.*  job file
+! /usr/spool/at/past           directory where jobs are executed from
+! /usr/spool/at/lasttimedone   last time atrun was run
+! /usr/libexec/atrun               executor (run by cron(8))
+  .fi
+  .SH "SEE ALSO"
+  atq(1),
+--- 102,112 ----
+  .IR mail (1).
+  .SH FILES
+  .nf
+! /usr/spool/at                   spooling area
+! /usr/spool/at/yyyy.ddd.hhhh.*   job file
+! /usr/spool/at/past              directory where jobs are executed from
+! /usr/spool/at/lasttimedone      last time atrun was run
+! /usr/libexec/atrun              executor (run by cron(8))
+  .fi
+  .SH "SEE ALSO"
+  atq(1),
+*** ./usr/src/usr.bin/at/atrm.c.old	Mon Feb 16 18:22:26 1987
+--- ./usr/src/usr.bin/at/atrm.c	Sun Sep 19 19:38:48 2021
+***************
+*** 4,23 ****
+   * specifies the terms and conditions for redistribution.
+   */
+  
+! #ifndef lint
+  char copyright[] =
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+- #endif not lint
+  
+! #ifndef lint
+! static char sccsid[] = "@(#)atrm.c	5.2 (Berkeley) 5/28/86";
+! #endif not lint
+  
+  /*
+   *	synopsis: atrm [-f] [-i] [-] [[job #] [user] ...]
+   *
+-  *
+   *	Remove files from the directory /usr/spool/at. These files
+   *	represent jobs to be run at a later date.
+   *
+--- 4,20 ----
+   * specifies the terms and conditions for redistribution.
+   */
+  
+! #if	!defined(lint) && defined(DOSCCS)
+  char copyright[] =
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)atrm.c	5.3 (2.11BSD) 9/18/2021";
+! #endif
+  
+  /*
+   *	synopsis: atrm [-f] [-i] [-] [[job #] [user] ...]
+   *
+   *	Remove files from the directory /usr/spool/at. These files
+   *	represent jobs to be run at a later date.
+   *
+***************
+*** 24,30 ****
+   *	Author: Steve Wall
+   *		Computer Systems Research Group
+   *		University of California @ Berkeley
+-  *
+   */
+  
+  #include <stdio.h>
+--- 21,26 ----
+***************
+*** 39,45 ****
+  #define MAXENTRIES	1000			/* max # of entries allowed */
+  #define ATDIR		"/usr/spool/at"		/* spooling area */
+  
+- 
+  int user;					/* person requesting removal */
+  int fflag = 0;					/* suppress announcements? */
+  int iflag = 0;					/* run interactively? */
+--- 35,40 ----
+***************
+*** 47,53 ****
+  main(argc,argv)
+  int argc;
+  char **argv;
+- 
+  {
+  	int i;				/* for loop index */
+  	int userid;			/* uid of owner of file */
+--- 42,47 ----
+***************
+*** 238,244 ****
+  
+  /*
+   * Do we want to include a file in the queue? (used by "scandir") We are looking
+!  * for files with following syntax: yy.ddd.hhhh. so the test is made to see if 
+   * the file name has three dots in it. This test will suffice since the only
+   * other files in /usr/spool/at don't have any dots in their name.
+   */
+--- 232,238 ----
+  
+  /*
+   * Do we want to include a file in the queue? (used by "scandir") We are looking
+!  * for files with following syntax: yyyy.ddd.hhhh. so the test is made to see if 
+   * the file name has three dots in it. This test will suffice since the only
+   * other files in /usr/spool/at don't have any dots in their name.
+   */
+*** ./usr/src/usr.bin/at/atrun.c.old	Wed Jul 15 20:46:08 1987
+--- ./usr/src/usr.bin/at/atrun.c	Sun Sep 19 19:39:49 2021
+***************
+*** 4,30 ****
+   * specifies the terms and conditions for redistribution.
+   */
+  
+! #ifndef lint
+  char copyright[] =
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+- #endif not lint
+  
+! #ifndef lint
+! static char sccsid[] = "@(#)atrun.c	5.4 (Berkeley) 5/28/86";
+! #endif not lint
+  
+  /*
+   *	Synopsis: atrun
+   *
+-  *
+   *	Run jobs created by at(1)
+   *
+-  *
+   *	Modifications by:	Steve Wall
+   *				Computer Systems Research Group
+   *				University of California @ Berkeley
+-  *
+   */
+  # include <stdio.h>
+  # include <sys/types.h>
+--- 4,25 ----
+   * specifies the terms and conditions for redistribution.
+   */
+  
+! #if	!defined(lint) && defined(DOSCCS)
+  char copyright[] =
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)atrun.c	5.5 (2.11BSD) 9/18/2021";
+! #endif
+  
+  /*
+   *	Synopsis: atrun
+   *
+   *	Run jobs created by at(1)
+   *
+   *	Modifications by:	Steve Wall
+   *				Computer Systems Research Group
+   *				University of California @ Berkeley
+   */
+  # include <stdio.h>
+  # include <sys/types.h>
+***************
+*** 47,67 ****
+  # define PASTDIR	"/usr/spool/at/past"	/* area to run jobs from */
+  # define LASTFILE	"/usr/spool/at/lasttimedone"	/* update time file */
+  
+! 
+! char nowtime[11];			/* time it is right now (yy.ddd.hhmm) */
+  char errfile[25];			/* file where we redirect errors to */
+  
+- 
+  main(argc, argv)
+  char **argv;
+  {
+- 
+  	int i;				/* for loop index */
+  	int numjobs;			/* number of jobs to be run */
+  	int should_be_run();		/* should a job be run? */
+  	struct direct **jobqueue;	/* queue of jobs to be run */
+  
+- 
+  	/*
+  	 * Move to the spooling area.
+  	 */
+--- 42,58 ----
+  # define PASTDIR	"/usr/spool/at/past"	/* area to run jobs from */
+  # define LASTFILE	"/usr/spool/at/lasttimedone"	/* update time file */
+  
+! char nowtime[14];			/* time it is right now (yyyy.ddd.hhmm) */
+  char errfile[25];			/* file where we redirect errors to */
+  
+  main(argc, argv)
+  char **argv;
+  {
+  	int i;				/* for loop index */
+  	int numjobs;			/* number of jobs to be run */
+  	int should_be_run();		/* should a job be run? */
+  	struct direct **jobqueue;	/* queue of jobs to be run */
+  
+  	/*
+  	 * Move to the spooling area.
+  	 */
+***************
+*** 98,104 ****
+  }
+  
+  /*
+!  * Create a string with the syntax yy.ddd.hhmm that represents the
+   * time it is right now. This string is used to determine whether a
+   * job should be run.
+   */
+--- 89,95 ----
+  }
+  
+  /*
+!  * Create a string with the syntax yyyy.ddd.hhmm that represents the
+   * time it is right now. This string is used to determine whether a
+   * job should be run.
+   */
+***************
+*** 125,133 ****
+  
+  	/*
+  	 * Create a string to be used in determining whether or not a job
+! 	 * should be run. The syntax is yy.ddd.hhmm .
+  	 */
+! 	sprintf(nowtime,"%d.%03d.%02d%02d",now->tm_year,
+  					   now->tm_yday,
+  					   now->tm_hour,
+  					   now->tm_min);
+--- 116,124 ----
+  
+  	/*
+  	 * Create a string to be used in determining whether or not a job
+! 	 * should be run. The syntax is yyyy.ddd.hhmm .
+  	 */
+! 	sprintf(nowtime,"%d.%03d.%02d%02d",now->tm_year+1900,
+  					   now->tm_yday,
+  					   now->tm_hour,
+  					   now->tm_min);
+*** ./usr/src/usr.bin/at/at.c.old	Mon Feb 16 18:22:25 1987
+--- ./usr/src/usr.bin/at/at.c	Sun Sep 19 19:37:29 2021
+***************
+*** 4,31 ****
+   * specifies the terms and conditions for redistribution.
+   */
+  
+! #ifndef lint
+  char copyright[] =
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+- #endif not lint
+  
+! #ifndef lint
+! static char sccsid[] = "@(#)at.c	5.4 (Berkeley) 5/28/86";
+! #endif not lint
+  
+  /*
+   *	Synopsis:	at [-s] [-c] [-m] time [filename]
+-  *						
+-  * 
+   *
+   *	Execute commands at a later date.
+   *
+-  *
+   *	Modifications by:	Steve Wall
+   *				Computer Systems Research Group
+   *				University of California @ Berkeley
+   *
+   */
+  #include <stdio.h>
+  #include <ctype.h>
+--- 4,28 ----
+   * specifies the terms and conditions for redistribution.
+   */
+  
+! #if	!defined(lint) && defined(DOSCCS)
+  char copyright[] =
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)at.c	5.5 (2.11BSD) 9/18/2021";
+! #endif
+  
+  /*
+   *	Synopsis:	at [-s] [-c] [-m] time [filename]
+   *
+   *	Execute commands at a later date.
+   *
+   *	Modifications by:	Steve Wall
+   *				Computer Systems Research Group
+   *				University of California @ Berkeley
+   *
++  *	Modifications by:	Johnny Billquist
++  *				Fix Y2K problems
+   */
+  #include <stdio.h>
+  #include <ctype.h>
+***************
+*** 120,126 ****
+  	int min;			/* min. of hour that job is to be run */
+  } attime, nowtime;
+  
+! char	atfile[100];			/* name of spoolfile "yy.ddd.hhhh.??" */
+  char	*getenv();			/* get info on user's environment */
+  char	**environ;			/* user's environment */
+  FILE	*spoolfile;			/* spool file */
+--- 117,123 ----
+  	int min;			/* min. of hour that job is to be run */
+  } attime, nowtime;
+  
+! char	atfile[100];			/* name of spoolfile "yyyy.ddd.hhhh.??" */
+  char	*getenv();			/* get info on user's environment */
+  char	**environ;			/* user's environment */
+  FILE	*spoolfile;			/* spool file */
+***************
+*** 507,514 ****
+  }
+  
+  /*
+!  * Create the filename for the spoolfile. The format is "yy.ddd.mmmm.??"
+!  * where "yy" is the year the job will be run, "ddd" the day of year, 
+   * "mmmm" the hour and minute, and "??" a scratch value used to dis-
+   * tinguish between two files that are to be run at the same time.
+   */
+--- 504,511 ----
+  }
+  
+  /*
+!  * Create the filename for the spoolfile. The format is "yyyy.ddd.mmmm.??"
+!  * where "yyyy" is the year the job will be run, "ddd" the day of year, 
+   * "mmmm" the hour and minute, and "??" a scratch value used to dis-
+   * tinguish between two files that are to be run at the same time.
+   */
+***************
+*** 522,528 ****
+  	int i;				/* scratch variable */
+  
+  	for (i=0; ; i += 53) {
+! 		sprintf(atfile, "%s/%02d.%03d.%02d%02d.%02d", ATDIR, year,
+  			dayofyear, hour, minute, (getpid() + i) % 100);
+  
+  		/*
+--- 519,525 ----
+  	int i;				/* scratch variable */
+  
+  	for (i=0; ; i += 53) {
+! 		sprintf(atfile, "%s/%04d.%03d.%02d%02d.%02d", ATDIR, year,
+  			dayofyear, hour, minute, (getpid() + i) % 100);
+  
+  		/*
+***************
+*** 694,703 ****
+  		attime.yday -= daysinyear;
+  		return(1);
+  	}
+- 	if (attime.yday > (isleap(attime.year) ? 366 : 365)) {
+- 		attime.yday -= (isleap(attime.year) ? 366 : 365);
+- 		return(1);
+- 	}
+  
+  	return(0);
+  }
+--- 691,696 ----
+***************
+*** 736,742 ****
+  int year;
+  
+  {
+! 	return((year%4 == 0 && year%100 != 0) || year%100 == 0);
+  }
+  
+  getdateindex(date)
+--- 729,735 ----
+  int year;
+  
+  {
+! 	return((year%4 == 0 && year%100 != 0) || year%400 == 0);
+  }
+  
+  getdateindex(date)
+***************
+*** 791,797 ****
+  	}
+  	now = localtime(&time.tv_sec);
+  
+! 	attime->year = nowtime->year = now->tm_year;
+  	attime->yday = nowtime->yday = now->tm_yday;
+  	attime->mon = nowtime->mon = now->tm_mon;
+  	attime->mday = nowtime->mday = now->tm_mday;
+--- 784,790 ----
+  	}
+  	now = localtime(&time.tv_sec);
+  
+! 	attime->year = nowtime->year = now->tm_year+1900;
+  	attime->yday = nowtime->yday = now->tm_yday;
+  	attime->mon = nowtime->mon = now->tm_mon;
+  	attime->mday = nowtime->mday = now->tm_mday;
+*** ./usr/src/usr.bin/at/atq.c.old	Wed Mar 11 20:36:06 1987
+--- ./usr/src/usr.bin/at/atq.c	Sun Sep 19 19:37:59 2021
+***************
+*** 4,33 ****
+   * specifies the terms and conditions for redistribution.
+   */
+  
+! #ifndef lint
+  char copyright[] =
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+- #endif not lint
+  
+! #ifndef lint
+! static char sccsid[] = "@(#)atq.c	5.2 (Berkeley) 5/28/86";
+! #endif not lint
+  
+  /*
+-  *
+   *	Synopsis:  atq [ -c ] [ -n ] [ name ... ]
+   *
+-  *
+   *	Print the queue of files waiting to be executed. These files 
+   *	were created by using the "at" command and are located in the 
+   *	directory "/usr/spool/at".
+   *
+-  *
+   *	Author: Steve Wall
+   *		Computer Systems Research Group
+   *		University of California @ Berkeley
+-  *
+   */
+  
+  # include <stdio.h>
+--- 4,27 ----
+   * specifies the terms and conditions for redistribution.
+   */
+  
+! #if	!defined(lint) && defined(DOSCCS)
+  char copyright[] =
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)atq.c	5.3 (2.11BSD) 9/18/2021";
+! #endif
+  
+  /*
+   *	Synopsis:  atq [ -c ] [ -n ] [ name ... ]
+   *
+   *	Print the queue of files waiting to be executed. These files 
+   *	were created by using the "at" command and are located in the 
+   *	directory "/usr/spool/at".
+   *
+   *	Author: Steve Wall
+   *		Computer Systems Research Group
+   *		University of California @ Berkeley
+   */
+  
+  # include <stdio.h>
+***************
+*** 362,368 ****
+  	 * Print the time that the spooling area was last updated.
+  	 */
+  	printf("\n LAST EXECUTION TIME: %s ",mthnames[loc->tm_mon]);
+! 	printf("%d, 19%d ",loc->tm_mday,loc->tm_year);
+  	printf("at %d:%02d\n\n",loc->tm_hour,loc->tm_min);
+  }
+  
+--- 356,362 ----
+  	 * Print the time that the spooling area was last updated.
+  	 */
+  	printf("\n LAST EXECUTION TIME: %s ",mthnames[loc->tm_mon]);
+! 	printf("%d, %d ",loc->tm_mday,loc->tm_year+1900);
+  	printf("at %d:%02d\n\n",loc->tm_hour,loc->tm_min);
+  }
+  
+***************
+*** 404,416 ****
+  	 * Pick off the necessary info from the file name and convert the day
+  	 * of year to a month and day of month.
+  	 */
+! 	sscanf(filename,"%2d.%3d.%2d%2d",&year,&yday,&hour,&min);
+  	get_mth_day(year,yday,&month,&day);
+  
+  	/*
+  	 * Format the execution date of a job.
+  	 */
+! 	sprintf(date,"%3s %2d, 19%2d %02d:%02d",mthnames[month],
+  						    day, year,hour,min);
+  
+  	/*
+--- 398,410 ----
+  	 * Pick off the necessary info from the file name and convert the day
+  	 * of year to a month and day of month.
+  	 */
+! 	sscanf(filename,"%4d.%3d.%2d%2d",&year,&yday,&hour,&min);
+  	get_mth_day(year,yday,&month,&day);
+  
+  	/*
+  	 * Format the execution date of a job.
+  	 */
+! 	sprintf(date,"%3s %2d, %4d %02d:%02d",mthnames[month],
+  						    day, year,hour,min);
+  
+  	/*
+***************
+*** 445,451 ****
+  	/*
+  	 * Are we dealing with a leap year?
+  	 */
+! 	leap = ((year%4 == 0 && year%100 != 0) || year%100 == 0);
+  
+  	/*
+  	 * Calculate the month of the year and day of the month.
+--- 439,445 ----
+  	/*
+  	 * Are we dealing with a leap year?
+  	 */
+! 	leap = ((year%4 == 0 && year%100 != 0) || year%400 == 0);
+  
+  	/*
+  	 * Calculate the month of the year and day of the month.
+***************
+*** 512,518 ****
+  
+  /*
+   * Do we want to include a file in the queue? (used by "scandir") We are looking
+!  * for files with following syntax: yy.ddd.hhhh. so the test is made to see if 
+   * the file name has three dots in it. This test will suffice since the only
+   * other files in /usr/spool/at don't have any dots in their name.
+   */
+--- 506,512 ----
+  
+  /*
+   * Do we want to include a file in the queue? (used by "scandir") We are looking
+!  * for files with following syntax: yyyy.ddd.hhhh. so the test is made to see if 
+   * the file name has three dots in it. This test will suffice since the only
+   * other files in /usr/spool/at don't have any dots in their name.
+   */
+*** ./VERSION.old	Mon Aug 30 08:19:31 2021
+--- ./VERSION	Sun Sep 19 07:36:43 2021
+***************
+*** 1,5 ****
+! Current Patch Level: 471
+! Date: August 30, 2021
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 472
+! Date: September 19, 2021
+  
+  2.11 BSD
+  ============

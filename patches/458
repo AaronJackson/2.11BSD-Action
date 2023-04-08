@@ -1,0 +1,260 @@
+Subject: superblock modified time set to 0 on boot
+Index:	 src/sys/sys/
+
+Description:
+	1) The kernel upon boot mounts the root filesystem and initializes the
+	modified time in the superblock with the current time:
+
+        if      (fs->fs_fmod)
+                {
+                bp =  getblk(mp->m_dev, SUPERB);
+                fs->fs_fmod = 0;
+                fs->fs_time = time.tv_sec;
+
+	Unless a system has a TOY clock the kernel's idea of current time is
+	the beginning of the epoch (0).  The code above was setting the date
+	in the root superblock to 0.
+
+	2) One small change to tcsh was overlooked from the patches a month ago.
+	   Using register variables when char pointers are used greatly improves
+	   the generated code.  GLOBAL symbols in overlays have a cost 
+	   in I-space because a thunk must be allocated in the base segment.
+	   Use of 'static' functions in overlays when possible reduces the
+	   size of the base segment.
+
+Repeat-By:
+	1) Boot a system without a TOY clock (having a toy clock sets the 
+	   kernel's time) and notice the current time (set from the root
+	   filesystem superblock) is the beginning of time (~1970).
+
+	2) size /bin/tcsh
+	   apply the patch and install tcsh
+	   size /bin/tcsh
+
+	   notice that the base segment decreases by 1 click (64 bytes) and
+	   the size of overlay 3 (OV3) decreases by 1 click (64bytes).
+	   
+Fix:
+
+	Description and patch for the superblock time update logic  from 
+	tih@hamartun.priv.no - thanks!  The patch moves the setting of the
+	time from ufs_sync() to sync()
+
+	Cut where indicated and save to a file (/tmp/458.patch).  Then:
+
+cd /
+patch -p0 < /tmp/458.patch
+cd /usr/src/bin/tcsh
+make
+make install
+make clean
+
+cd /sys/YOUR_KERNEL 
+make
+(install the kernel and reboot)
+
+IF you maintain a copy of the GENERIC kernel on the system you will want to
+rebuild/install the GENERIC kernel as well
+
+cd /sys/GENERIC
+make
+(install unix - I keep a copy as /genunix)
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.update.uu.se/pub/pdp11/2.11BSD
+	http://www.tuhs.org/Archive/PDP-11/Distributions/ucb/2.11BSD/Patches
+	ftp://ftp.2bsd.com/2.11BSD
+
+ --------------------------cut here--------------------
+*** ./usr/src/sys/sys/ufs_subr.c.old	Mon Nov 18 08:00:48 2019
+--- ./usr/src/sys/sys/ufs_subr.c	Tue Dec 17 08:43:44 2019
+***************
+*** 3,9 ****
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)ufs_subr.c	1.6 (2.11BSD) 2019/11/18
+   */
+  
+  #include "param.h"
+--- 3,9 ----
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)ufs_subr.c	1.7 (2.11BSD) 2019/12/17
+   */
+  
+  #include "param.h"
+***************
+*** 41,46 ****
+--- 41,47 ----
+  			continue;
+  		async = mp->m_flags & MNT_ASYNC;
+  		mp->m_flags &= ~MNT_ASYNC;
++ 		fs->fs_time = time.tv_sec;
+  		ufs_sync(mp);
+  		mp->m_flags |= async;
+  		}
+*** ./usr/src/sys/sys/ufs_alloc.c.old	Fri Nov  3 22:50:45 2000
+--- ./usr/src/sys/sys/ufs_alloc.c	Tue Dec 17 08:43:30 2019
+***************
+*** 3,9 ****
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)ufs_alloc.c	1.4 (2.11BSD) 2000/10/14
+   */
+  
+  #include "param.h"
+--- 3,9 ----
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)ufs_alloc.c	1.5 (2.11BSD) 2019/12/17
+   */
+  
+  #include "param.h"
+***************
+*** 76,82 ****
+  		 */
+  		bp = getblk(ip->i_dev, SUPERB);
+  		fs->fs_fmod = 0;
+- 		fs->fs_time = time.tv_sec;
+  		{
+  			register struct fs *fps;
+  
+--- 76,81 ----
+*** ./usr/src/sys/sys/ufs_mount.c.old	Mon Nov 18 07:59:50 2019
+--- ./usr/src/sys/sys/ufs_mount.c	Tue Dec 17 08:43:56 2019
+***************
+*** 3,9 ****
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)ufs_mount.c	2.2 (2.11BSD) 2019/11/18
+   */
+  
+  #include "param.h"
+--- 3,9 ----
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)ufs_mount.c	2.3 (2.11BSD) 2019/12/17
+   */
+  
+  #include "param.h"
+***************
+*** 10,15 ****
+--- 10,16 ----
+  #include "../machine/seg.h"
+  
+  #include "systm.h"
++ #include "kernel.h"
+  #include "user.h"
+  #include "inode.h"
+  #include "fs.h"
+***************
+*** 293,298 ****
+--- 294,300 ----
+  		  fs->fs_fmod = 1;		/* SB update needed */
+  		  fs->fs_flags |= MNT_CLEAN;	/* File system is now clean */
+  		}
++ 		fs->fs_time = time.tv_sec;
+  	}
+  
+  	ufs_sync(mp);
+*** ./usr/src/sys/sys/ufs_syscalls2.c.old	Sat Feb  1 01:13:13 1997
+--- ./usr/src/sys/sys/ufs_syscalls2.c	Tue Dec 17 08:44:13 2019
+***************
+*** 1,5 ****
+  /*
+!  * 	@(#) 	ufs_syscalls2.c	  1.5 (2.11BSD) 1997/1/31
+   *
+   * ufs_syscalls was getting too large.  Various UFS related system calls were
+   * relocated to this file.
+--- 1,5 ----
+  /*
+!  * 	@(#) 	ufs_syscalls2.c	  1.6 (2.11BSD) 2019/12/17
+   *
+   * ufs_syscalls was getting too large.  Various UFS related system calls were
+   * relocated to this file.
+***************
+*** 151,157 ****
+  		{
+  		bp =  getblk(mp->m_dev, SUPERB);
+  		fs->fs_fmod = 0;
+- 		fs->fs_time = time.tv_sec;
+  		bcopy(fs, mapin(bp), sizeof (struct fs));
+  		mapout(bp);
+  		bwrite(bp);
+--- 151,156 ----
+*** ./usr/src/bin/tcsh/tw.parse.c.old	Sat Nov 23 13:38:40 2019
+--- ./usr/src/bin/tcsh/tw.parse.c	Wed Nov 27 08:21:44 2019
+***************
+*** 40,46 ****
+  #include "config.h"
+  #if !defined(lint) && !defined(pdp11)
+  static char *rcsid() 
+!     { return "$Id: tw.parse.c,v 3.1 2019/11/21 19:12:00 bqt Exp $"; }
+  #endif
+  
+  #include "sh.h"
+--- 40,46 ----
+  #include "config.h"
+  #if !defined(lint) && !defined(pdp11)
+  static char *rcsid() 
+!     { return "$Id: tw.parse.c,v 3.2 2019/11/27 19:12:00 bqt Exp $"; }
+  #endif
+  
+  #include "sh.h"
+***************
+*** 92,97 ****
+--- 92,98 ----
+  static	int	 ignored		__P((Char *));
+  static	void	 tw_get_comm_list	__P((void));
+  static	int	 isadirectory		__P((Char *, Char *));
++ static	char	*unquote();
+  
+  /*
+   * If we find a set command, then we break a=b to a= and word becomes
+***************
+*** 416,425 ****
+      return (buffer);
+  }
+  
+! char * unquote(s)
+!   char *s;
+  {
+!   char *p = s;
+    while (*p) {
+      *p &= TRIM;
+      ++p;
+--- 417,427 ----
+      return (buffer);
+  }
+  
+! static char *unquote(s)
+!   register char *s;
+  {
+!   register char *p = s;
+! 
+    while (*p) {
+      *p &= TRIM;
+      ++p;
+*** ./VERSION.old	Sat Nov 23 08:52:43 2019
+--- ./VERSION	Tue Dec 17 07:58:48 2019
+***************
+*** 1,5 ****
+! Current Patch Level: 457
+! Date: November 25, 2019
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 458
+! Date: December 17, 2019
+  
+  2.11 BSD
+  ============

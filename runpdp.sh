@@ -18,11 +18,10 @@ rsync -a --safe-links --ignore-errors "$PWD/" "/bsd/$arg_path" || true
 
 echo "Unmounting retro-fuse file system"
 sudo umount /bsd
+sudo rmdir /bsd
 
-PASSWORD=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 8)
 DATE=$(date +%y%m%d%H%M)
 
-echo "2.11BSD root password will be set to $PASSWORD"
 echo "Date will be set to $DATE"
 
 cat - > pdp.expect <<EOF
@@ -42,9 +41,6 @@ expect "# " {send \004}
 expect "login: " {send "root\n"}
 
 expect "# " {send "date $DATE\n"}
-expect "# " {send "passwd\n"}
-expect "New password:" {send "$PASSWORD\n"}
-expect "Retype new password:" {send "$PASSWORD\n"}
 
 proc checkrun {cmd} {
   expect "# " { send "\$cmd\n" }
@@ -66,6 +62,15 @@ while IFS= read -r line; do
 checkrun "$line"
 EOF
 done <<< "$arg_run"
+
+cat >> pdp.expect <<EOF
+expect "# " {send "sync\n"}
+sleep 2
+expect "# " {send "halt\n"}
+
+set timeout 10
+expect "sim>" {send "exit\n"}
+EOF
 
 chmod +x pdp.expect
 ./pdp.expect

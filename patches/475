@@ -1,0 +1,569 @@
+Subject: sysctl(2) string handling error (#475)
+Index:	 src/sys/sys/kern_sysctl.c src/ucb/top/top.c
+
+Description:
+	According to sysctl documentation if the destination space for a 
+	string being retrieved is shorter than the actual string in the 
+	kernel  the system call will return as much of the string as 
+	possible and return ENOMEM.
+
+	In reality no data at all is copied out - but ENOMEM is returned.
+
+Repeat-By:
+	Set a hostname of more than 9 characters and run top(1). top(1) is 
+	supposed to print the hostname in the upper left corner but it becomes 
+	a null string if the hostname was 8 or more characters.
+	
+Fix:
+
+1. top allowing a host name of up to 10 characters are actually a bit too
+   much to fit on the screen. So the displayed length was reduced to 7 
+   characters.  Also if there is a period in the string the string is 
+   terminated at the period.
+
+2. Fix sysctl() to actually copy out as much of the string as fits.
+   Error is still ENOMEM in this case.
+
+   In the words of the patch author: Johnny Billquist <bqt@softjar.se>:
+
+      "sysctl ... now pretty much works the same as NetBSD, which I think is 
+      also how other systems do.
+
+      For most programs it won't make a difference, however, the behavior is 
+      different from before if the output buffer is smaller than the amount of 
+      data available. It now always returns, in oldlen, the actual size of the 
+      source of the data, so in this case it is not the amount copied out.
+      Also, if the data was truncated, errno is set to ENOMEM, so a program 
+      can both see if the data was truncated, know how large the original data 
+      was, and process whatever it did get."
+
+   The alternative would have been to update the documentation ;)
+   
+	To apply this patch cut where indicated and save to /tmp/475.patch
+
+	Then:
+
+	cd /
+	patch -p0 < /tmp/475.patch
+
+	cd /usr/src/ucb/top
+	make install
+	make clean
+
+	# a kernel recompile/reboot is necessary.   if you maintain a GENERIC
+	# kernel then recompile that kernel also
+
+   This and previous updates to 2.11BSD are available at these locations:
+	
+	ftp://ftp.dfupdate.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+*** usr/src/ucb/top/top.c.old	Mon Aug 30 08:18:54 2021
+--- usr/src/ucb/top/top.c	Sun Aug 28 06:46:40 2022
+***************
+*** 23,29 ****
+   * 06 29/08/2021 Changed and corrected uptime calculation.        bqt
+   *               Changed header layout.
+   *               Added %cpu time to header.
+!  *
+   */
+  /*
+   * Using RAW removes the need for signal processing, but adds a requirement
+--- 23,29 ----
+   * 06 29/08/2021 Changed and corrected uptime calculation.        bqt
+   *               Changed header layout.
+   *               Added %cpu time to header.
+!  * 07 26/8/2022  Truncate hostname by first period or 7 char.     bqt
+   */
+  /*
+   * Using RAW removes the need for signal processing, but adds a requirement
+***************
+*** 36,41 ****
+--- 36,42 ----
+  #include <stdio.h>
+  #include <unistd.h>	/* usleep */
+  #include <stdlib.h>	/* getopt */
++ #include <string.h>
+  #include <sys/param.h>	/* NGROUPS */
+  #include <sys/sysctl.h>	/* boottime,.. */
+  #include <ctype.h>	/* isdigit */
+***************
+*** 137,143 ****
+  LOCAL struct utmp	utmp;
+  LOCAL int		nusers;
+  LOCAL double		avenrun[3];
+! LOCAL char		host[10];
+  
+  LOCAL struct  map_s
+  {
+--- 138,144 ----
+  LOCAL struct utmp	utmp;
+  LOCAL int		nusers;
+  LOCAL double		avenrun[3];
+! LOCAL char		host[8];
+  
+  LOCAL struct  map_s
+  {
+***************
+*** 1263,1268 ****
+--- 1264,1270 ----
+  {
+  	int 	status = 0;
+  	char	ch;
++ 	char	*p;
+  
+  	if (argc < 2)
+  	{
+***************
+*** 1309,1314 ****
+--- 1311,1317 ----
+  
+  	gethostname(host, sizeof(host)-1);
+  	host[sizeof(host)-1] = 0;
++ 	if (p = strchr(host, '.')) *p = 0;
+  
+  	if(config_tty(1) < 0)
+  		return(1);
+*** usr/src/sys/sys/kern_sysctl.c.old	Thu Mar  5 22:10:34 2020
+--- usr/src/sys/sys/kern_sysctl.c	Sun Aug 28 06:46:40 2022
+***************
+*** 33,39 ****
+   * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+   * SUCH DAMAGE.
+   *
+!  *	@(#)kern_sysctl.c	8.6 (2.11BSD) 2020/3/5
+   */
+  
+  /*
+--- 33,39 ----
+   * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+   * SUCH DAMAGE.
+   *
+!  *	@(#)kern_sysctl.c	8.7 (2.11BSD) 2022/8/28
+   */
+  
+  /*
+***************
+*** 94,113 ****
+  {
+  	register struct sysctl_args *uap = (struct sysctl_args *)u.u_ap;
+  	int error;
+! 	u_int savelen, oldlen = 0;
+  	sysctlfn *fn;
+  	int name[CTL_MAXNAME];
+  
+  	if (uap->new != NULL && !suser())
+! 		return (u.u_error);	/* XXX */
+  	/*
+  	 * all top-level sysctl names are non-terminal
+  	 */
+  	if (uap->namelen > CTL_MAXNAME || uap->namelen < 2)
+  		return (u.u_error = EINVAL);
+  	if (error = copyin(uap->name, &name, uap->namelen * sizeof(int)))
+  		return (u.u_error = error);
+  
+  	switch (name[0]) {
+  	case CTL_KERN:
+  		fn = kern_sysctl;
+--- 94,124 ----
+  {
+  	register struct sysctl_args *uap = (struct sysctl_args *)u.u_ap;
+  	int error;
+! 	size_t savelen, oldlen = 0;
+  	sysctlfn *fn;
+  	int name[CTL_MAXNAME];
+  
++         /*
++          * Only superuser is allowed to change values.
++          */
+  	if (uap->new != NULL && !suser())
+! 		return (u.u_error = EPERM);	/* XXX */
+! 
+  	/*
+  	 * all top-level sysctl names are non-terminal
+  	 */
+  	if (uap->namelen > CTL_MAXNAME || uap->namelen < 2)
+  		return (u.u_error = EINVAL);
++ 
++         /*
++          * Get the name path.
++          */
+  	if (error = copyin(uap->name, &name, uap->namelen * sizeof(int)))
+  		return (u.u_error = error);
+  
++         /*
++          * Find which function to use.
++          */
+  	switch (name[0]) {
+  	case CTL_KERN:
+  		fn = kern_sysctl;
+***************
+*** 140,148 ****
+--- 151,164 ----
+  		return (u.u_error = EOPNOTSUPP);
+  	}
+  
++         /*
++          * Get oldlen
++          */
+  	if (uap->oldlenp &&
+  	    (error = copyin(uap->oldlenp, &oldlen, sizeof(oldlen))))
+  		return (u.u_error = error);
++ 	savelen = oldlen;
++ 
+  	if (uap->old != NULL) {
+  		while (memlock.sl_lock) {
+  			memlock.sl_want = 1;
+***************
+*** 150,159 ****
+  			memlock.sl_locked++;
+  		}
+  		memlock.sl_lock = 1;
+- 		savelen = oldlen;
+  	}
+  	error = (*fn)(name + 1, uap->namelen - 1, uap->old, &oldlen,
+  	    uap->new, uap->newlen);
+  	if (uap->old != NULL) {
+  		memlock.sl_lock = 0;
+  		if (memlock.sl_want) {
+--- 166,179 ----
+  			memlock.sl_locked++;
+  		}
+  		memlock.sl_lock = 1;
+  	}
++ 
++         /*
++          * Get the value
++          */
+  	error = (*fn)(name + 1, uap->namelen - 1, uap->old, &oldlen,
+  	    uap->new, uap->newlen);
++ 
+  	if (uap->old != NULL) {
+  		memlock.sl_lock = 0;
+  		if (memlock.sl_want) {
+***************
+*** 161,175 ****
+  			wakeup((caddr_t)&memlock);
+  		}
+  	}
+! 	if (error)
+! 		return (u.u_error = error);
+  	if (uap->oldlenp) {
+! 		error = copyout(&oldlen, uap->oldlenp, sizeof(oldlen));
+! 		if (error)
+! 			return(u.u_error = error);
+  	}
+! 	u.u_r.r_val1 = oldlen;
+! 	return (0);
+  }
+  
+  /*
+--- 181,198 ----
+  			wakeup((caddr_t)&memlock);
+  		}
+  	}
+! 
+!         /* Always copy out length, if we have one. */
+  	if (uap->oldlenp) {
+! 		int nerror;
+! 		nerror = copyout(&oldlen, uap->oldlenp, sizeof(oldlen));
+! 		if (error == 0) error=nerror;
+  	}
+!         if (error == 0 && uap->old != NULL && savelen < oldlen) error = ENOMEM;
+! 
+! 	if (error == 0) u.u_r.r_val1 = oldlen;
+! 
+! 	return (u.u_error = error);
+  }
+  
+  /*
+***************
+*** 185,191 ****
+  {
+  	int error, level;
+  	u_long longhostid;
+- 	char bsd[10];
+  	extern int Acctthresh;		/* kern_acct.c */
+  	extern char version[];
+  
+--- 208,213 ----
+***************
+*** 195,205 ****
+  
+  	switch (name[0]) {
+  	case KERN_OSTYPE:
+! 		bsd[0]='B';bsd[1]='S';bsd[2]='D';bsd[3]='\0';
+! 		return (sysctl_rdstring(oldp, oldlenp, newp, bsd));
+  	case KERN_OSRELEASE:
+! 		bsd[0]='2';bsd[1]='.';bsd[2]='1';bsd[3]='1';bsd[4]='\0';
+! 		return (sysctl_rdstring(oldp, oldlenp, newp, bsd));
+  	case KERN_ACCTTHRESH:
+  		level = Acctthresh;
+  		error = sysctl_int(oldp, oldlenp, newp, newlen, &level);
+--- 217,225 ----
+  
+  	switch (name[0]) {
+  	case KERN_OSTYPE:
+! 		return (sysctl_rdstring(oldp, oldlenp, newp, "BSD"));
+  	case KERN_OSRELEASE:
+! 		return (sysctl_rdstring(oldp, oldlenp, newp, "2.11"));
+  	case KERN_ACCTTHRESH:
+  		level = Acctthresh;
+  		error = sysctl_int(oldp, oldlenp, newp, newlen, &level);
+***************
+*** 485,499 ****
+  {
+  	int error = 0;
+  
+- 	if (oldp && *oldlenp < sizeof(int))
+- 		return (ENOMEM);
+  	if (newp && newlen != sizeof(int))
+  		return (EINVAL);
+- 	*oldlenp = sizeof(int);
+  	if (oldp)
+! 		error = copyout(valp, oldp, sizeof(int));
+  	if (error == 0 && newp)
+  		error = copyin(newp, valp, sizeof(int));
+  	return (error);
+  }
+  
+--- 505,517 ----
+  {
+  	int error = 0;
+  
+  	if (newp && newlen != sizeof(int))
+  		return (EINVAL);
+  	if (oldp)
+! 		error = copyout(valp, oldp, MIN(sizeof(int),*oldlenp));
+  	if (error == 0 && newp)
+  		error = copyin(newp, valp, sizeof(int));
++ 	*oldlenp = sizeof(int);
+  	return (error);
+  }
+  
+***************
+*** 508,520 ****
+  {
+  	int error = 0;
+  
+- 	if (oldp && *oldlenp < sizeof(int))
+- 		return (ENOMEM);
+  	if (newp)
+  		return (EPERM);
+- 	*oldlenp = sizeof(int);
+  	if (oldp)
+! 		error = copyout((caddr_t)&val, oldp, sizeof(int));
+  	return (error);
+  }
+  
+--- 526,536 ----
+  {
+  	int error = 0;
+  
+  	if (newp)
+  		return (EPERM);
+  	if (oldp)
+! 		error = copyout((caddr_t)&val, oldp, MIN(sizeof(int),*oldlenp));
+! 	*oldlenp = sizeof(int);
+  	return (error);
+  }
+  
+***************
+*** 531,545 ****
+  {
+  	int error = 0;
+  
+- 	if (oldp && *oldlenp < sizeof(long))
+- 		return (ENOMEM);
+  	if (newp && newlen != sizeof(long))
+  		return (EINVAL);
+- 	*oldlenp = sizeof(long);
+  	if (oldp)
+! 		error = copyout(valp, oldp, sizeof(long));
+  	if (error == 0 && newp)
+  		error = copyin(newp, valp, sizeof(long));
+  	return (error);
+  }
+  
+--- 547,559 ----
+  {
+  	int error = 0;
+  
+  	if (newp && newlen != sizeof(long))
+  		return (EINVAL);
+  	if (oldp)
+! 		error = copyout(valp, oldp, MIN(sizeof(long),*oldlenp));
+  	if (error == 0 && newp)
+  		error = copyin(newp, valp, sizeof(long));
++ 	*oldlenp = sizeof(long);
+  	return (error);
+  }
+  
+***************
+*** 554,566 ****
+  {
+  	int error = 0;
+  
+- 	if (oldp && *oldlenp < sizeof(long))
+- 		return (ENOMEM);
+  	if (newp)
+  		return (EPERM);
+- 	*oldlenp = sizeof(long);
+  	if (oldp)
+! 		error = copyout((caddr_t)&val, oldp, sizeof(long));
+  	return (error);
+  }
+  
+--- 568,578 ----
+  {
+  	int error = 0;
+  
+  	if (newp)
+  		return (EPERM);
+  	if (oldp)
+! 		error = copyout((caddr_t)&val, oldp, MIN(sizeof(long), *oldlenp));
+! 	*oldlenp = sizeof(long);
+  	return (error);
+  }
+  
+***************
+*** 579,596 ****
+  	int len, error = 0;
+  
+  	len = strlen(str) + 1;
+- 	if (oldp && *oldlenp < len)
+- 		return (ENOMEM);
+  	if (newp && newlen >= maxlen)
+  		return (EINVAL);
+  	if (oldp) {
+! 		*oldlenp = len;
+! 		error = vcopyout(str, oldp, len);
+  	}
+  	if (error == 0 && newp) {
+  		error = vcopyin(newp, str, newlen);
+  		str[newlen] = 0;
+  	}
+  	return (error);
+  }
+  
+--- 591,606 ----
+  	int len, error = 0;
+  
+  	len = strlen(str) + 1;
+  	if (newp && newlen >= maxlen)
+  		return (EINVAL);
+  	if (oldp) {
+! 		error = vcopyout(str, oldp, MIN(len, *oldlenp));
+  	}
+  	if (error == 0 && newp) {
+  		error = vcopyin(newp, str, newlen);
+  		str[newlen] = 0;
+  	}
++ 	*oldlenp = len;
+  	return (error);
+  }
+  
+***************
+*** 606,618 ****
+  	int len, error = 0;
+  
+  	len = strlen(str) + 1;
+- 	if (oldp && *oldlenp < len)
+- 		return (ENOMEM);
+  	if (newp)
+  		return (EPERM);
+- 	*oldlenp = len;
+  	if (oldp)
+! 		error = vcopyout(str, oldp, len);
+  	return (error);
+  }
+  
+--- 616,626 ----
+  	int len, error = 0;
+  
+  	len = strlen(str) + 1;
+  	if (newp)
+  		return (EPERM);
+  	if (oldp)
+! 		error = vcopyout(str, oldp, MIN(len, *oldlenp));
+! 	*oldlenp = len;
+  	return (error);
+  }
+  
+***************
+*** 630,645 ****
+  {
+  	int error = 0;
+  
+- 	if (oldp && *oldlenp < len)
+- 		return (ENOMEM);
+  	if (newp && newlen > len)
+  		return (EINVAL);
+  	if (oldp) {
+! 		*oldlenp = len;
+! 		error = copyout(sp, oldp, len);
+  	}
+  	if (error == 0 && newp)
+  		error = copyin(newp, sp, len);
+  	return (error);
+  }
+  
+--- 638,651 ----
+  {
+  	int error = 0;
+  
+  	if (newp && newlen > len)
+  		return (EINVAL);
+  	if (oldp) {
+! 		error = copyout(sp, oldp, MIN(len, *oldlenp));
+  	}
+  	if (error == 0 && newp)
+  		error = copyin(newp, sp, len);
++ 	*oldlenp = len;
+  	return (error);
+  }
+  
+***************
+*** 655,667 ****
+  {
+  	int error = 0;
+  
+- 	if (oldp && *oldlenp < len)
+- 		return (ENOMEM);
+  	if (newp)
+  		return (EPERM);
+- 	*oldlenp = len;
+  	if (oldp)
+! 		error = copyout(sp, oldp, len);
+  	return (error);
+  }
+  
+--- 661,671 ----
+  {
+  	int error = 0;
+  
+  	if (newp)
+  		return (EPERM);
+  	if (oldp)
+! 		error = copyout(sp, oldp, MIN(len, *oldlenp));
+! 	*oldlenp = len;
+  	return (error);
+  }
+  
+*** VERSION.old	Thu Aug 18 07:13:00 2022
+--- VERSION	Sun Aug 28 16:29:13 2022
+***************
+*** 1,5 ****
+! Current Patch Level: 474
+! Date: August 23, 2022
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 475
+! Date: August 28, 2022
+  
+  2.11 BSD
+  ============
