@@ -752,3 +752,29 @@ jobs:
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-478.dsk.gz
 
 
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_479
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-479.dsk.gz
+
+      - name: apply 479
+        if: steps.built_479.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 478
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/479 > /tmp/479.patch
+            cd /
+            patch -p0 < /tmp/479.patch
+            cd /usr/src/ucb/ftp
+            make
+            make install
+            make clean
+
+      - if: steps.built_479.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-479.dsk.gz
+
