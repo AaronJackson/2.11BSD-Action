@@ -18,6 +18,7 @@ rsync -a --safe-links --ignore-errors "$PWD/" "/bsd/$arg_path" || true
 
 echo "Unmounting retro-fuse file system"
 sudo umount /bsd
+sudo rmdir /bsd
 
 DATE=$(date +%y%m%d%H%M)
 
