@@ -44,29 +44,29 @@ kernel is also rebuilt when necessary and provided in `/genunix`.
 
 | Patch | URL                                                                          |
 | ---   | ---                                                                          |
-| 457   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-457.dsk.gz |
-| 458   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-458.dsk.gz |
-| 459   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-459.dsk.gz |
-| 460   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-460.dsk.gz |
-| 461   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-461.dsk.gz |
-| 462   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-462.dsk.gz |
-| 463   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-463.dsk.gz |
-| 464   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-464.dsk.gz |
-| 465   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-465.dsk.gz |
-| 466   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-466.dsk.gz |
-| 467   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-467.dsk.gz |
-| 468   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-468.dsk.gz |
-| 469   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-469.dsk.gz |
-| 470   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-470.dsk.gz |
-| 471   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-471.dsk.gz |
-| 472   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-472.dsk.gz |
-| 473   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-473.dsk.gz |
-| 474   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-474.dsk.gz |
-| 475   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-475.dsk.gz |
-| 476   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-476.dsk.gz |
-| 477   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-477.dsk.gz |
-| 478   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-478.dsk.gz |
-| 479   | https://https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-479.dsk.gz |
+| 457   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-457.dsk.gz |
+| 458   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-458.dsk.gz |
+| 459   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-459.dsk.gz |
+| 460   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-460.dsk.gz |
+| 461   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-461.dsk.gz |
+| 462   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-462.dsk.gz |
+| 463   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-463.dsk.gz |
+| 464   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-464.dsk.gz |
+| 465   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-465.dsk.gz |
+| 466   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-466.dsk.gz |
+| 467   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-467.dsk.gz |
+| 468   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-468.dsk.gz |
+| 469   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-469.dsk.gz |
+| 470   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-470.dsk.gz |
+| 471   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-471.dsk.gz |
+| 472   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-472.dsk.gz |
+| 473   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-473.dsk.gz |
+| 474   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-474.dsk.gz |
+| 475   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-475.dsk.gz |
+| 476   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-476.dsk.gz |
+| 477   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-477.dsk.gz |
+| 478   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-478.dsk.gz |
+| 479   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-479.dsk.gz |
 
 These images can be written to a SCSI (SCSI2SD if you want) and run on
 a real PDP-11, if you have one.
