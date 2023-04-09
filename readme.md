@@ -20,7 +20,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v3
       - name: run uname
-        uses: AaronJackson/2.11BSD-Action
+        uses: AaronJackson/2.11BSD-Action@v2
         with:
           path: /usr/src/sys/
           patch_level: 479
