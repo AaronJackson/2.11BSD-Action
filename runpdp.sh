@@ -15,9 +15,6 @@ bsd211fs ../ci.dsk /bsd
 echo "syncing sources"
 mkdir -p "/mnt/$arg_path"
 rsync -a \
-      --copy-unsafe-links \
-      --hard-links \
-      --links \
       --ignore-errors \
       "$PWD/" "/bsd/$arg_path" || true
 
