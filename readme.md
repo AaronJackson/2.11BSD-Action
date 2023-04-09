@@ -23,7 +23,7 @@ jobs:
         uses: AaronJackson/2.11BSD-Action
         with:
           path: /usr/src/sys/
-		  patch_level: 479
+          patch_level: 479
           run: |
             cd GENERIC
             make
