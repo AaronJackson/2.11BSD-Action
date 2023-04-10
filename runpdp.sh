@@ -60,8 +60,13 @@ proc checkrun {cmd} {
 
 set timeout -1
 
-mkdir -p $arg_path
-cp -r /scratch/ $arg_path/
+checkrun "mkdir -p $arg_path"
+checkrun "mkdir /scratch"
+checkrun "cd /dev"
+checkrun "./MAKEDEV ra1"
+checkrun "mount /dev/ra1a /scratch"
+checkrun "cd /"
+checkrun "cp -r /scratch/ $arg_path/"
 
 checkrun "cd $arg_path"
 EOF
