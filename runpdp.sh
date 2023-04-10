@@ -59,14 +59,14 @@ proc checkrun {cmd} {
 
 set timeout -1
 
-expect "# " {send "mkdir -p $arg_path"}
-expect "# " {send "mkdir /scratch"}
-expect "# " {send "cd /dev"}
-expect "# " {send "./MAKEDEV ra1"}
-expect "# " {send "mount /dev/ra1a /scratch"}
-expect "# " {send "cd /"}
-expect "# " {send "cp -r /scratch/ $arg_path/"}
-expect "# " {send "cd $arg_path"}
+expect "# " {send "mkdir -p $arg_path\n"}
+expect "# " {send "mkdir /scratch\n"}
+expect "# " {send "cd /dev\n"}
+expect "# " {send "./MAKEDEV ra1\n"}
+expect "# " {send "mount /dev/ra1a /scratch\n"}
+expect "# " {send "cd /\n"}
+expect "# " {send "cp -r /scratch/ $arg_path/\n"}
+expect "# " {send "cd $arg_path\n"}
 EOF
 
 while IFS= read -r line; do
