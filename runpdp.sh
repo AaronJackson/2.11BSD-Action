@@ -77,8 +77,6 @@ EOF
 done <<< "$arg_run"
 
 cat >> pdp.expect <<EOF
-checkrun "rm -rf $arg_path"
-
 checkrun "sync"
 checkrun "sleep 5"
 expect "# " {send "shutdown now\n"}
