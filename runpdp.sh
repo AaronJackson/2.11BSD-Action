@@ -84,8 +84,6 @@ checkrun "sleep 5"
 expect "# " {send "shutdown now\n"}
 
 expect "# "
-checkrun "fsck -y -t fscratch"
-checkrun "rm fscratch* || true"
 
 send "halt"
 
