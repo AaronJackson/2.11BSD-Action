@@ -46,10 +46,13 @@ expect "# " {send "date $DATE\n"}
 proc checkrun {cmd} {
   expect "# " { send "\$cmd\n" }
   expect "# " {send "echo \\\$?\n"}
-  expect {
-    "0" { }
-    "1" { exit 1 }
-    default { exit 1 }
+
+  expect -re "(\\d+)" {
+    set result $expect_out(1,string)
+  }
+
+  if { \$result != 0 ) {
+    exit \$result
   }
 }
 
@@ -66,8 +69,18 @@ done <<< "$arg_run"
 
 cat >> pdp.expect <<EOF
 checkrun "sync"
-checkrun "sleep 3"
-expect "# " {send "halt\n"}
+checkrun "sleep 5"
+expect "# " {send "shutdown now\n"}
+
+expect "erase, kill"
+expect "# "
+checkrun "fsck -y -t fscratch"
+checkrun "rm fscratch* || true"
+
+checkrun "sync"
+checkrun "sleep 5"
+
+send "halt"
 
 set timeout 10
 expect "sim>" {send "exit\n"}
