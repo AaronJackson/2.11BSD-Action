@@ -41,7 +41,6 @@ expect "# " {send \004}
 expect "login: " {send "root\n"}
 
 expect "# " {send "date $DATE\n"}
-expect "# " {send "sleep 3\n"}
 
 proc checkrun {cmd} {
   expect "# " { send "\$cmd\n" }
