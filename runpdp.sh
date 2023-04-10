@@ -51,7 +51,7 @@ proc checkrun {cmd} {
     set result \$expect_out(1,string)
   }
 
-  if { \$result != 0 ) {
+  if { \$result != 0 } {
     exit \$result
   }
 }
