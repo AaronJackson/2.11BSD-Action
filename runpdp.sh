@@ -47,7 +47,7 @@ proc checkrun {cmd} {
   expect "# " { send "\$cmd\n" }
   expect "# " {send "echo \\\$?\n"}
 
-  expect -re "(\\d+)" {
+  expect -re "(\\\\d+)" {
     set result \$expect_out(1,string)
   }
 
