@@ -72,7 +72,6 @@ checkrun "sync"
 checkrun "sleep 5"
 expect "# " {send "shutdown now\n"}
 
-expect "erase, kill"
 expect "# "
 checkrun "fsck -y -t fscratch"
 checkrun "rm fscratch* || true"
