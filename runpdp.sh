@@ -13,7 +13,7 @@ sudo chown $USER /bsd
 bsd211fs -o initfs,fssize=$(( 1024 * 100 )),overwrite ../scratch.dsk /bsd
 
 echo "syncing sources"
-rsync -a --safe-links --ignore-errors "$PWD/" "/bsd/$arg_path" || true
+rsync -a --safe-links --ignore-errors "$PWD/" "/bsd/" || true
 
 echo "Unmounting retro-fuse file system"
 sudo umount /bsd
@@ -41,6 +41,7 @@ expect "# " {send \004}
 expect "login: " {send "root\n"}
 
 expect "# " {send "date $DATE\n"}
+expect "# " {send "sleep 3"\n"}
 
 proc checkrun {cmd} {
   expect "# " { send "\$cmd\n" }
@@ -59,15 +60,14 @@ proc checkrun {cmd} {
 
 set timeout -1
 
-checkrun "mkdir -p $arg_path"
-checkrun "mkdir /scratch"
-checkrun "cd /dev"
-checkrun "./MAKEDEV ra1"
-checkrun "mount /dev/ra1a /scratch"
-checkrun "cd /"
-checkrun "cp -r /scratch/ $arg_path/"
-
-checkrun "cd $arg_path"
+expect "# " {"mkdir -p $arg_path"}
+expect "# " {"mkdir /scratch"}
+expect "# " {"cd /dev"}
+expect "# " {"./MAKEDEV ra1"}
+expect "# " {"mount /dev/ra1a /scratch"}
+expect "# " {"cd /"}
+expect "# " {"cp -r /scratch/ $arg_path/"}
+expect "# " {"cd $arg_path"}
 EOF
 
 while IFS= read -r line; do
