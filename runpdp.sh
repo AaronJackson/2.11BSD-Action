@@ -48,7 +48,7 @@ proc checkrun {cmd} {
   expect "# " {send "echo \\\$?\n"}
 
   expect -re "(\\d+)" {
-    set result $expect_out(1,string)
+    set result \$expect_out(1,string)
   }
 
   if { \$result != 0 ) {
