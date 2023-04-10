@@ -6,14 +6,14 @@ arg_run="$1"
 arg_path="$2"
 
 [ -f ../ci.dsk.gz ] && gzip -d ../ci.dsk.gz
+[ -f ../scratch.dsk ] && rm ../scratch.dsk
 
 echo "Mounting 2.11BSD file system with retro-fuse"
 sudo mkdir /bsd
 sudo chown $USER /bsd
-bsd211fs ../ci.dsk /bsd
+bsd211fs -o initfs,fssize=$(( 1024 * 1024 * 100)) ../scratch.dsk /bsd
 
 echo "syncing sources"
-mkdir -p "/mnt/$arg_path"
 rsync -a --safe-links --ignore-errors "$PWD/" "/bsd/$arg_path" || true
 
 echo "Unmounting retro-fuse file system"
@@ -59,6 +59,9 @@ proc checkrun {cmd} {
 }
 
 set timeout -1
+
+mkdir -p $arg_path
+cp -r /scratch/ $arg_path/
 
 checkrun "cd $arg_path"
 EOF
