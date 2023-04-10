@@ -85,7 +85,7 @@ expect "# " {send "shutdown now\n"}
 
 expect "# "
 
-send "halt"
+send "halt\n"
 
 set timeout 20
 expect "sim>" {send "exit\n"}
