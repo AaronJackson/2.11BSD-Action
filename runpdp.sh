@@ -31,6 +31,7 @@ spawn pdp11
 expect "sim>" {send "set cpu 11/73 4M\n"}
 expect "sim>" {send "set rq enabled\n"}
 expect "sim>" {send "att rq0 ../ci.dsk\n"}
+expect "sim>" {send "att rq1 ../scratch.dsk\n"}
 expect "sim>" {send "set clk 50hz\n"}
 expect "sim>" {send "boot rq0\n"}
 
