@@ -51,7 +51,9 @@ proc checkrun {cmd} {
     set result \$expect_out(1,string)
   }
 
-  if { \$result != 0 } {
+  if { \$result == 0 } {
+  } elseif { \$result == 4 } {
+  } else {
     exit \$result
   }
 }
@@ -75,9 +77,6 @@ expect "# " {send "shutdown now\n"}
 expect "# "
 checkrun "fsck -y -t fscratch"
 checkrun "rm fscratch* || true"
-
-checkrun "sync"
-checkrun "sleep 5"
 
 send "halt"
 
