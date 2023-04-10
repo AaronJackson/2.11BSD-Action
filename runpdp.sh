@@ -67,6 +67,7 @@ expect "# " {send "mount /dev/ra1a /scratch\n"}
 expect "# " {send "cd /\n"}
 expect "# " {send "cp -r /scratch/ $arg_path/\n"}
 expect "# " {send "cd $arg_path\n"}
+expect "# " {send "umount /scratch\n"}
 EOF
 
 while IFS= read -r line; do
@@ -76,6 +77,8 @@ EOF
 done <<< "$arg_run"
 
 cat >> pdp.expect <<EOF
+checkrun "rm -rf $arg_path"
+
 checkrun "sync"
 checkrun "sleep 5"
 expect "# " {send "shutdown now\n"}
@@ -86,7 +89,7 @@ checkrun "rm fscratch* || true"
 
 send "halt"
 
-set timeout 10
+set timeout 20
 expect "sim>" {send "exit\n"}
 EOF
 
