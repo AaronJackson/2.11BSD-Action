@@ -69,4 +69,6 @@ kernel is also rebuilt when necessary and provided in `/genunix`.
 | 479   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-479.dsk.gz |
 
 These images can be written to a SCSI (SCSI2SD if you want) and run on
-a real PDP-11, if you have one.
+a real PDP-11, if you have one. Or, if you want to do a fresh install from tape, I
+also have produced distribution files for the same set of patch levels above. 
+[AaronJackson/2.11BSD-Distribution-Builder](https://github.com/AaronJackson/2.11BSD-Distribution-Builder)
