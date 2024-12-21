@@ -1,0 +1,2482 @@
+Subject: /vmunix removal, disktab errors, bad144 fails, dump exit status wrong, cc escaped char omission, 
+Index:	 netstat/, identd/paths.h, top.c, gcore.c, acucntrl.c, fstat.c, iostat.c, rwhod.8, bad144.c, arp/, man1/, man2/, man3, zic.8, pdpuba/si.c
+
+Description:
+	/vmunix (and /dev/drum) are relics that should not be present in the
+	system.  Rather the programs  that use them should have been updated
+	as they were ported.
+
+	'dump' exits with status 1 upon a successful run.  Running dump within
+	a makefile causes make to stop because an error appears to have 
+	happened.  The successful exit status (used by all other programs on
+	the sysem) should be 0.
+
+	The C compiler does not generate a BEL (0x7) for the '\a' character
+	constant.  The printf(1) page says " \a Write a <bell> character." but
+	the compiler prints 'a'.
+
+	The disktab(5) file (installed from /usr/src/etc/disktab) is full of
+	garbage.  Many obsolete entries but worse than that *wrong* / unusable
+	information is present.  disklabel(8) relies on the information in
+	disktab(5) for its defaults ("disklabel -e" does not so manually
+	edited/created labels are good/unaffected).
+
+	bad144(8) uses the old 'h' partition to access the badblock info on a
+	disk.  When disklabels were implmented that convention changed to 'c'
+	but bad144 was never changed.  BUT the bad news is that neither 'c' or'h	'h' partitions created by disklabel agree with the  built-in table
+	of bad144.   This means that bad144 always fails.
+
+	Yes, bad144 makes no sense on emulated disks.  However I believe
+	a programs should be able do no harm successfully!  And the disktab
+	file needed to be fixed anyhow.
+
+Repeat-By:
+	Remove /vmunix and progams such as arp, top, gcore, etc stop working.
+
+   cd /sys/pdpstand/
+   make dump
+   dump 0f /usr/root.dump /dev/rra0a
+   DUMP: Date of this level 0 dump: Sun Sep 15 13:45:25 2024
+   DUMP: DUMP IS DONE
+   DUMP: Closing /usr/root.dump
+  *** Exit 1
+  Stop.
+
+	Compile this test program - see a and 0x61 rather than a bel/0x7
+---
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(argc, argv) 
+	int argc;
+	char **argv;
+{	
+	printf("vertical tab as char:\t\"%c\", alert as hex: 0x%02x\n",
+               '\v',
+	       '\v');
+
+	printf("alert (bell) as char:\t\"%c\", alert as hex: 0x%02x\n",
+               '\a',
+	       '\a');
+
+	exit(0);
+}
+----
+
+	If you want to feel ill read /usr/share/etc/disktab ;)  
+	Overlapping paritions, obsolete enties, many entries lacking a
+	partition that spans the entire disk, etc.
+
+	bad144 had correct information for the size of the disks (including
+	the last track where the badsector info is kept) BUT the partitions
+	created by disklabel using bogus information (from /etc/disktab) 
+	did NOT have the correct 'h' (or 'c') partition size.  That resulted
+	in an error when bad144 tried to read past the end of the partition.
+
+	Also, the trsp(8) manpage should not be installed.  The program does
+	not compile and is marked broken in the usr.sbin/Makefile
+
+Fix:
+	Cut where indicated and save to /tmp/482.patch and then
+
+cd /
+patch -p0 < /tmp/482.patch
+
+	The following can be run as a script if you don't want to do the 
+	typing ;)
+
+---
+#!/bin/sh -v
+
+cd /usr/src/lib/ccom
+make c0
+install -s c0 /lib/c0
+make clean
+
+cd /usr/src/sbin/dump
+make install
+make clean
+
+cd ../dmesg
+make install
+make clean
+
+cd /usr/src/ucb
+make vmstat gcore
+install -g kmem -m 2755 -s gcore /usr/ucb/gcore
+install -g kmem -m 2755 -s vmstat /usr/ucb/vmstat
+
+cd netstat
+make install
+make clean
+
+cd ../top
+make install
+make clean
+
+cd /usr/src/usr.bin/uucp
+make acucntrl
+install -s -m 6110 -o root -g daemon acucntrl /usr/libexec/acucntrl
+make clean
+
+cd /usr/src/usr.bin
+make iostat
+install -s -g kmem -m 2755 iostat /usr/bin/iostat
+
+cd fstat
+make install
+make clean
+
+cd /usr/src/libexec/identd
+make install
+make clean
+
+cd /usr/src/local
+make trace
+install -s -o bin -g kmem -m 2755 trace /usr/local/trace
+make clean
+
+cd /usr/src/usr.sbin/rwhod
+make install
+make clean
+
+cd /usr/src/usr.sbin/pstat
+make install
+make clean
+
+cd ../syslogd
+make install
+make clean
+
+cd ../bad144
+make install
+make clean
+
+cd ../trpt
+make install
+make clean
+
+cd /usr/src/man/man1
+make cc.0 iostat.0 netstat.0 uptime.0 vmstat.0
+install -c -o bin -g bin -m 444 *.0 /usr/man/cat1
+make clean
+
+cd ../man2
+make reboot.0
+install -c -o bin -g bin -m 444 *.0 /usr/man/cat2
+make clean
+
+cd ../man3
+make nlist.0
+install -c -o bin -g bin -m 444 *.0 /usr/man/cat3
+make clean
+
+cd /usr/src/share/zoneinfo
+make zic.0
+install -c -o bin -g bin -m 444 *.0 /usr/man/cat8
+make clean
+
+rm -f /usr/man/cat8/trsp.0
+
+rm -f /vmunix
+exit 0
+---
+	If you have made local modifications to /etc/disktab then merge
+	the contents of /usr/src/etc/disktab into /etc/disktab at your leisure.
+
+	If /etc/disktab has no local changes then:
+
+	    cp /usr/src/etc/disktab /etc
+
+	Patching files leaves behind old versions with a tilde appended
+
+	    find / -name '*~' -print
+
+	these can be safely removed anytime.
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.dfupdate.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+*** ./usr/src/lib/ccom/c00.c.old	Fri Jan 21 14:12:57 2022
+--- ./usr/src/lib/ccom/c00.c	Tue Sep 24 09:46:15 2024
+***************
+*** 7,13 ****
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static	char	sccsid[] = "@(#)c00.c	2.3 (2.11BSD) 2022/1/21";
+  #endif
+  
+  #include "c0.h"
+--- 7,13 ----
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static	char	sccsid[] = "@(#)c00.c	2.4 (2.11BSD) 2024/9/24";
+  #endif
+  
+  #include "c0.h"
+***************
+*** 594,599 ****
+--- 594,602 ----
+  
+  	case '\\':
+  		switch (a=getc00()) {
++ 
++ 		case 'a':
++ 			return('\007');
+  
+  		case 't':
+  			return('\t');
+*** ./usr/src/libexec/identd/src/paths.h.old	Fri Oct 18 03:58:08 1996
+--- ./usr/src/libexec/identd/src/paths.h	Fri Sep 20 14:00:50 2024
+***************
+*** 1,7 ****
+  /*
+  ** paths.h		Common path definitions for the in.identd daemon
+  **
+! ** Last update: 11 Dec 1992
+  **
+  ** Please send bug fixes/bug reports to: Peter Eriksson <pen@lysator.liu.se>
+  */
+--- 1,7 ----
+  /*
+  ** paths.h		Common path definitions for the in.identd daemon
+  **
+! ** Last update: 20 Sep 2024
+  **
+  ** Please send bug fixes/bug reports to: Peter Eriksson <pen@lysator.liu.se>
+  */
+***************
+*** 10,16 ****
+  #  define _PATH_UNIX "/dynix"
+  #endif
+  
+! #if defined(MIPS) || defined(IRIX) || defined(sco) || defined(_SEQUENT_)
+  #  define _PATH_UNIX "/unix"
+  #endif
+  
+--- 10,16 ----
+  #  define _PATH_UNIX "/dynix"
+  #endif
+  
+! #if defined(MIPS) || defined(IRIX) || defined(sco) || defined(_SEQUENT_) || defined(pdp11)
+  #  define _PATH_UNIX "/unix"
+  #endif
+  
+*** ./usr/src/libexec/identd/Makefile.old	Mon Dec 16 22:05:14 1996
+--- ./usr/src/libexec/identd/Makefile	Thu Sep 26 19:52:38 2024
+***************
+*** 4,9 ****
+--- 4,11 ----
+  # This program is in the public domain and may be used freely by anyone
+  # who wants to. 
+  #
++ # Update: 26 September 2024 - add idecrypt.0 to install target
++ #
+  # Last update: 13 December 1996 - 2.11BSD specific version created.
+  #
+  # Please send bug fixes/bug reports to: Peter Eriksson <pen@lysator.liu.se>
+***************
+*** 57,63 ****
+  identconn: identconn.sh
+  	sed -e 's,xDESTROOTx,$(DESTROOT),g' $? > $@
+  
+! install: identd identd.0 identconn itest idecrypt
+  	install -m 644 identd.0 $(MANDIR)/identd.0
+  	install -m 755 identd $(EXECDIR)/identd
+  	install -m 755 identconn $(BINDIR)/identconn
+--- 59,65 ----
+  identconn: identconn.sh
+  	sed -e 's,xDESTROOTx,$(DESTROOT),g' $? > $@
+  
+! install: identd identd.0 idecrypt.0 identconn itest idecrypt
+  	install -m 644 identd.0 $(MANDIR)/identd.0
+  	install -m 755 identd $(EXECDIR)/identd
+  	install -m 755 identconn $(BINDIR)/identconn
+*** ./usr/src/local/trace.c.old	Sat Jun 29 14:41:17 1991
+--- ./usr/src/local/trace.c	Sat Sep 28 07:58:03 2024
+***************
+*** 18,27 ****
+  	register i;
+  	int	iter;
+  
+! 	nlist("/vmunix", nl);
+  	if	(nl[0].n_type == 0)
+  		{
+! 		fprintf(stderr, "no /vmunix namelist\n");
+  		exit(1);
+  	}
+  	mf = open("/dev/kmem", 0);
+--- 18,27 ----
+  	register i;
+  	int	iter;
+  
+! 	nlist("/unix", nl);
+  	if	(nl[0].n_type == 0)
+  		{
+! 		fprintf(stderr, "no /unix namelist\n");
+  		exit(1);
+  	}
+  	mf = open("/dev/kmem", 0);
+*** ./usr/src/sbin/dump/dump.h.old	Tue Dec  6 23:48:31 1994
+--- ./usr/src/sbin/dump/dump.h	Wed Sep 18 19:11:17 2024
+***************
+*** 1,5 ****
+  /*
+!  * "@(#)dump.h	1.2 (2.11BSD GTE) 12/6/94"
+   */
+  #define	NI	4	/* number of blocks of inodes per read */
+  
+--- 1,5 ----
+  /*
+!  * "@(#)dump.h	1.3 (2.11BSD) 2024/9/18"
+   */
+  #define	NI	4	/* number of blocks of inodes per read */
+  
+***************
+*** 80,86 ****
+  /*
+   *	Exit status codes
+   */
+! #define	X_FINOK		1	/* normal exit */
+  #define	X_REWRITE	2	/* restart writing from the check point */
+  #define	X_ABORT		3	/* abort all of dump; don't attempt checkpointing*/
+  
+--- 80,86 ----
+  /*
+   *	Exit status codes
+   */
+! #define	X_FINOK		0	/* normal exit */
+  #define	X_REWRITE	2	/* restart writing from the check point */
+  #define	X_ABORT		3	/* abort all of dump; don't attempt checkpointing*/
+  
+*** ./usr/src/sbin/dump/Makefile.old	Sat Nov 16 22:01:57 1996
+--- ./usr/src/sbin/dump/Makefile	Thu Sep 26 01:16:44 2024
+***************
+*** 1,4 ****
+! # sccsid = "@(#)Makefile	1.5 (2.11BSD GTE) 1996/11/16"
+  #
+  #	dump.h			header file
+  #	dumpitime.c		reads /etc/ddate
+--- 1,4 ----
+! # sccsid = "@(#)Makefile	1.6 (2.11BSD) 2024/9/26"
+  #
+  #	dump.h			header file
+  #	dumpitime.c		reads /etc/ddate
+***************
+*** 31,38 ****
+  rdump: ${ROBJS}
+  	cc ${CFLAGS} ${SEPFLAG} ${ROBJS} -o rdump
+  
+! dumpdir: dumpdir.c
+! 	cc ${CFLAGS} ${SEPFLAG} dumpdir.c -o dumpdir
+  
+  install: all
+  	install -s dump ${DESTDIR}/sbin/dump
+--- 31,38 ----
+  rdump: ${ROBJS}
+  	cc ${CFLAGS} ${SEPFLAG} ${ROBJS} -o rdump
+  
+! dumpdir: dumpdir.o
+! 	cc ${CFLAGS} ${SEPFLAG} dumpdir.o -o dumpdir
+  
+  install: all
+  	install -s dump ${DESTDIR}/sbin/dump
+*** ./usr/src/sbin/dmesg/dmesg.c.old	Mon Jan 10 23:52:32 1994
+--- ./usr/src/sbin/dmesg/dmesg.c	Sat Sep 28 08:06:25 2024
+***************
+*** 5,11 ****
+   */
+  
+  #if	defined(DOSCCS) && !defined(lint)
+! static char sccsid[] = "@(#)dmesg.c	5.4.1 (2.11BSD GTE) 1/1/94";
+  #endif
+  
+  /*
+--- 5,11 ----
+   */
+  
+  #if	defined(DOSCCS) && !defined(lint)
+! static char sccsid[] = "@(#)dmesg.c	5.5 (2.11BSD) 2024/9/28";
+  #endif
+  
+  /*
+***************
+*** 41,49 ****
+  	int mem;
+  	register char *mp, *omp, *mstart;
+  	int samef, sawnl, ignore;
+- #ifdef	pdp11
+  	char msgb[MSG_BSIZE];
+- #endif
+  
+  	if (argc>1 && argv[1][0] == '-') {
+  		sflg++;
+--- 41,47 ----
+***************
+*** 58,68 ****
+  		lseek(of, 0L, 0);
+  	}
+  	sflg = 0;
+- #ifdef pdp11
+  	nlist(argc>2? argv[2]:"/unix", nl);
+- #else
+- 	nlist(argc>2? argv[2]:"/vmunix", nl);
+- #endif
+  	if (nl[0].n_type==0)
+  		done("Can't get kernel namelist\n");
+  	if ((mem = open((argc>1? argv[1]: "/dev/mem"), 0)) < 0)
+--- 56,62 ----
+***************
+*** 75,85 ****
+  		msgbuf.msg_bufx = 0;
+  	if (omesg.msg_bufx >= MSG_BSIZE)
+  		omesg.msg_bufx = 0;
+- #ifdef	pdp11
+  	msgbuf.msg_bufc = msgb;
+  	lseek(mem, (long)ctob((long)msgbuf.msg_click), 0);
+  	read(mem, msgbuf.msg_bufc, MSG_BSIZE);
+- #endif
+  	mstart = &msgbuf.msg_bufc[omesg.msg_bufx];
+  	omp = &omesg.msg_bufc[msgbuf.msg_bufx];
+  	mp = msgbufp = &msgbuf.msg_bufc[msgbuf.msg_bufx];
+--- 69,77 ----
+*** ./usr/src/sbin/dmesg/Makefile.old	Sun Nov 17 20:29:13 1996
+--- ./usr/src/sbin/dmesg/Makefile	Sat Sep 28 08:07:04 2024
+***************
+*** 1,7 ****
+  #
+  # Public Domain.  1996/11/16 - Steven Schultz
+  #
+! #	@(#)Makefile	1.0 (2.11BSD) 1996/11/16
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+--- 1,7 ----
+  #
+  # Public Domain.  1996/11/16 - Steven Schultz
+  #
+! #	@(#)Makefile	1.1 (2.11BSD) 2024/9/28
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+***************
+*** 24,30 ****
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: dmesg
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o bin -g kmem -m 2755 dmesg ${DESTDIR}/sbin/dmesg
+  
+--- 24,30 ----
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: dmesg dmesg.0
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o bin -g kmem -m 2755 dmesg ${DESTDIR}/sbin/dmesg
+  
+*** ./usr/src/usr.sbin/trpt/Makefile.old	Tue Nov 19 23:01:30 1996
+--- ./usr/src/usr.sbin/trpt/Makefile	Sat Sep 28 08:16:44 2024
+***************
+*** 1,7 ****
+  #
+  # Public Domain.  1996/11/16 - Steven Schultz
+  #
+! #	@(#)Makefile	1.0 (2.11BSD) 1996/11/16
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+--- 1,7 ----
+  #
+  # Public Domain.  1996/11/16 - Steven Schultz
+  #
+! #	@(#)Makefile	1.1 (2.11BSD) 2024/9/28
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+***************
+*** 24,30 ****
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: trpt
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o bin -g kmem -m 2755 trpt ${DESTDIR}/usr/sbin/trpt
+  
+--- 24,30 ----
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: trpt trpt.0
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o bin -g kmem -m 2755 trpt ${DESTDIR}/usr/sbin/trpt
+  
+*** ./usr/src/usr.sbin/trpt/trpt.c.old	Tue Jan  7 21:56:25 2020
+--- ./usr/src/usr.sbin/trpt/trpt.c	Sat Sep 28 08:18:04 2024
+***************
+*** 5,11 ****
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)trpt.c	5.3 (2.11BSD) 2020/1/7";
+  #endif not lint
+  
+  #include <sys/param.h>
+--- 5,11 ----
+   */
+  
+  #if	!defined(lint) && defined(DOSCCS)
+! static char sccsid[] = "@(#)trpt.c	5.4 (2.11BSD) 2024/9/28";
+  #endif not lint
+  
+  #include <sys/param.h>
+***************
+*** 62,68 ****
+  	char **argv;
+  {
+  	int i, mask = 0, npcbs = 0;
+! 	char *system = "/vmunix", *core = "/dev/kmem";
+  
+  	argc--, argv++;
+  again:
+--- 62,68 ----
+  	char **argv;
+  {
+  	int i, mask = 0, npcbs = 0;
+! 	char *system = "/unix", *core = "/dev/kmem";
+  
+  	argc--, argv++;
+  again:
+*** ./usr/src/usr.sbin/trpt/trpt.8.old	Sun Dec 14 17:08:48 1986
+--- ./usr/src/usr.sbin/trpt/trpt.8	Sat Sep 28 08:17:37 2024
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)trpt.8c	6.2 (Berkeley) 5/26/86
+  .\"
+! .TH TRPT 8C "May 26, 1986"
+  .UC 5
+  .SH NAME
+  trpt \- transliterate protocol trace
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)trpt.8c	6.2.1 (2.11BSD) 2024/9/28
+  .\"
+! .TH TRPT 8C "September 28, 2024"
+  .UC 5
+  .SH NAME
+  trpt \- transliterate protocol trace
+***************
+*** 95,101 ****
+  core file other than the default, the last two
+  arguments may be used to supplant the defaults.
+  .SH FILES
+! /vmunix
+  .br
+  /dev/kmem
+  .SH "SEE ALSO"
+--- 95,101 ----
+  core file other than the default, the last two
+  arguments may be used to supplant the defaults.
+  .SH FILES
+! /unix
+  .br
+  /dev/kmem
+  .SH "SEE ALSO"
+*** ./usr/src/ucb/netstat/main.c.oldimp.old	Tue Jan 11 00:24:31 1994
+--- ./usr/src/ucb/netstat/main.c.oldimp	Fri Sep 20 13:50:01 2024
+***************
+*** 15,21 ****
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)main.c	5.8.1 (2.11BSD GTE) 1/1/94";
+  #endif
+  
+  #include <sys/param.h>
+--- 15,21 ----
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)main.c	5.9 (2.11BSD) 2024/9/20";
+  #endif
+  
+  #include <sys/param.h>
+***************
+*** 176,182 ****
+  
+  struct	pte *Sysmap;
+  
+! char	*system = "/vmunix";
+  #ifndef pdp11
+  char	*kmemf = "/dev/kmem";
+  #else
+--- 176,182 ----
+  
+  struct	pte *Sysmap;
+  
+! char	*system = "/unix";
+  #ifndef pdp11
+  char	*kmemf = "/dev/kmem";
+  #else
+*** ./usr/src/ucb/netstat/main.c.newimp.old	Sun Feb  7 22:43:03 1988
+--- ./usr/src/ucb/netstat/main.c.newimp	Fri Sep 20 13:52:33 2024
+***************
+*** 10,24 ****
+   * is provided ``as is'' without express or implied warranty.
+   */
+  
+! #ifndef lint
+  char copyright[] =
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+- #endif not lint
+  
+! #ifndef lint
+! static char sccsid[] = "@(#)main.c	5.11 (Berkeley) 2/7/88";
+! #endif not lint
+  
+  #include <sys/param.h>
+  #include <sys/vmmac.h>
+--- 10,22 ----
+   * is provided ``as is'' without express or implied warranty.
+   */
+  
+! #if defined(DOSCCS) && !defined(lint)
+  char copyright[] =
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)main.c	5.12 (2.11BSD) 2024/9/20";
+! #endif
+  
+  #include <sys/param.h>
+  #include <sys/vmmac.h>
+***************
+*** 123,129 ****
+  
+  struct	pte *Sysmap;
+  
+! char	*system = "/vmunix";
+  char	*kmemf = "/dev/kmem";
+  int	kmem;
+  int	kflag;
+--- 121,127 ----
+  
+  struct	pte *Sysmap;
+  
+! char	*system = "/unix";
+  char	*kmemf = "/dev/kmem";
+  int	kmem;
+  int	kflag;
+*** ./usr/src/ucb/netstat/host.c.newimp.old	Mon Feb  8 13:02:06 1988
+--- ./usr/src/ucb/netstat/host.c.newimp	Fri Sep 20 13:53:23 2024
+***************
+*** 10,18 ****
+   * is provided ``as is'' without express or implied warranty.
+   */
+  
+! #ifndef lint
+! static char sccsid[] = "@(#)host.c	5.7 (Berkeley) 2/8/88";
+! #endif not lint
+  
+  #include <sys/types.h>
+  #include <sys/mbuf.h>
+--- 10,18 ----
+   * is provided ``as is'' without express or implied warranty.
+   */
+  
+! #if defined(DOSCCS) && !defined(lint)
+! static char sccsid[] = "@(#)host.c	5.8 (2.11BSD) 2024/9/20";
+! #endif
+  
+  #include <sys/types.h>
+  #include <sys/mbuf.h>
+*** ./usr/src/ucb/netstat/host.c.oldimp.old	Tue Jan 11 00:23:58 1994
+--- ./usr/src/ucb/netstat/host.c.oldimp	Fri Sep 20 13:54:02 2024
+***************
+*** 11,17 ****
+   */
+  
+  #if	defined(DOSCCS) && !defined(lint)
+! static char sccsid[] = "@(#)host.c	5.3.1 (2.11BSD GTE) 1/1/94";
+  #endif
+  
+  #include <sys/types.h>
+--- 11,17 ----
+   */
+  
+  #if	defined(DOSCCS) && !defined(lint)
+! static char sccsid[] = "@(#)host.c	5.4 (2.11BSD) 2024/9/20";
+  #endif
+  
+  #include <sys/types.h>
+*** ./usr/src/ucb/top/top.c.old	Sun Aug 28 06:46:40 2022
+--- ./usr/src/ucb/top/top.c	Fri Sep 20 14:08:07 2024
+***************
+*** 24,29 ****
+--- 24,30 ----
+   *               Changed header layout.
+   *               Added %cpu time to header.
+   * 07 26/8/2022  Truncate hostname by first period or 7 char.     bqt
++  * 08 20/9/2024  Change /vmunix to /unix                          sms
+   */
+  /*
+   * Using RAW removes the need for signal processing, but adds a requirement
+***************
+*** 1033,1042 ****
+  	int			nread;
+  	int			npr;
+  
+! 	nlist("/vmunix", nl);
+  	if(nl[0].n_type == 0)
+  	{
+! 		fprintf(stderr, "no /vmunix namelist\n");
+  		return(1);
+  	}
+  
+--- 1034,1043 ----
+  	int			nread;
+  	int			npr;
+  
+! 	nlist("/unix", nl);
+  	if(nl[0].n_type == 0)
+  	{
+! 		fprintf(stderr, "no /unix namelist\n");
+  		return(1);
+  	}
+  
+*** ./usr/src/ucb/vmstat.c.old	Wed Dec 31 10:46:59 2008
+--- ./usr/src/ucb/vmstat.c	Fri Sep 20 14:08:33 2024
+***************
+*** 9,15 ****
+  "@(#) Copyright (c) 1980 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)vmstat.c	5.4.2 (2.11BSD GTE) 1997/3/28";
+  #endif
+  
+  #include <stdio.h>
+--- 9,15 ----
+  "@(#) Copyright (c) 1980 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)vmstat.c	5.5 (2.11BSD) 2024/9/20";
+  #endif
+  
+  #include <stdio.h>
+***************
+*** 163,171 ****
+  	long nintv, t;
+  	char *arg, **cp, buf[BUFSIZ];
+  
+! 	nlist("/vmunix", nl);
+  	if(nl[0].n_type == 0) {
+! 		fprintf(stderr, "no /vmunix namelist\n");
+  		exit(1);
+  	}
+  	mf = open("/dev/kmem", 0);
+--- 163,171 ----
+  	long nintv, t;
+  	char *arg, **cp, buf[BUFSIZ];
+  
+! 	nlist("/unix", nl);
+  	if(nl[0].n_type == 0) {
+! 		fprintf(stderr, "no /unix namelist\n");
+  		exit(1);
+  	}
+  	mf = open("/dev/kmem", 0);
+*** ./usr/src/ucb/gcore.c.old	Fri Apr 15 23:28:50 1994
+--- ./usr/src/ucb/gcore.c	Fri Sep 20 14:10:09 2024
+***************
+*** 10,15 ****
+--- 10,19 ----
+   * handling swapped out processes (it doesn't). - sms
+   */
+  
++ #if     defined(DOSCCS) && !defined(lint)
++ static char sccsid[] = "@(#)gcore.c    1.3 (2.11BSD) 2024/9/20";
++ #endif
++ 
+  #include <sys/param.h>
+  #include <sys/user.h>
+  #include <sys/proc.h>
+***************
+*** 18,24 ****
+  #include <nlist.h>
+  #include <varargs.h>
+  
+! #define NLIST	"/vmunix"
+  #define MEM	"/dev/mem"
+  
+  struct nlist nl[] = {
+--- 22,28 ----
+  #include <nlist.h>
+  #include <varargs.h>
+  
+! #define NLIST	"/unix"
+  #define MEM	"/dev/mem"
+  
+  struct nlist nl[] = {
+*** ./usr/src/usr.bin/uucp/acucntrl.c.old	Mon Dec  2 00:59:59 1996
+--- ./usr/src/usr.bin/uucp/acucntrl.c	Fri Sep 20 14:10:57 2024
+***************
+*** 1,5 ****
+  #if	defined(DOSCCS) && !defined(lint)
+! static char sccsid[] = "@(#)acucntrl.c	5.8.2 (2.11BSD GTE) 1996/3/22";
+  #endif
+  
+  /*  acucntrl - turn around tty line between dialin and dialout
+--- 1,5 ----
+  #if	defined(DOSCCS) && !defined(lint)
+! static char sccsid[] = "@(#)acucntrl.c	5.9 (2.11BSD) 2024/9/20";
+  #endif
+  
+  /*  acucntrl - turn around tty line between dialin and dialout
+***************
+*** 177,183 ****
+  	opnttys(device);
+  
+  	/* Get nlist info */
+! 	nlist("/vmunix", nl);
+  
+  	/* Chdir to /dev */
+  	if(chdir(Devhome) < 0) {
+--- 177,183 ----
+  	opnttys(device);
+  
+  	/* Get nlist info */
+! 	nlist("/unix", nl);
+  
+  	/* Chdir to /dev */
+  	if(chdir(Devhome) < 0) {
+*** ./usr/src/usr.bin/uucp/acucntrl.8.old	Wed Nov 27 23:56:08 1996
+--- ./usr/src/usr.bin/uucp/acucntrl.8	Fri Sep 20 14:11:33 2024
+***************
+*** 1,6 ****
+! .\"	@(#)acucntrl.8	6.2.1 (2.11BSD) 1996/11/27
+  .\"
+! .TH acucntrl 8 "November 27, 1996"
+  .UC 6
+  .SH NAME
+  acucntrl \- turn around tty line between dialin and dialout
+--- 1,6 ----
+! .\"	@(#)acucntrl.8	6.3 (2.11BSD) 2024/9/20
+  .\"
+! .TH acucntrl 8 "Sep 20, 2024"
+  .UC 6
+  .SH NAME
+  acucntrl \- turn around tty line between dialin and dialout
+***************
+*** 107,113 ****
+  .RI ( i . e .
+  hacked to death)
+  .SH FILES
+! /dev/kmem, /vmunix, /etc/ttys, /var/run/utmp, /dev/tty*
+  .SH BUGS
+  .PP
+  Sensing carrier requires the 4.2 BSD TIOCMGET ioctl call.  Unfortunately this
+--- 107,113 ----
+  .RI ( i . e .
+  hacked to death)
+  .SH FILES
+! /dev/kmem, /unix, /etc/ttys, /var/run/utmp, /dev/tty*
+  .SH BUGS
+  .PP
+  Sensing carrier requires the 4.2 BSD TIOCMGET ioctl call.  Unfortunately this
+*** ./usr/src/usr.bin/fstat/fstat.c.old	Mon Jan 10 23:51:13 1994
+--- ./usr/src/usr.bin/fstat/fstat.c	Fri Sep 20 14:10:37 2024
+***************
+*** 15,21 ****
+  "@(#) Copyright (c) 1987 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)fstat.c	5.11.1 (2.11BSD GTE) 12/31/93";
+  #endif
+  
+  /*
+--- 15,21 ----
+  "@(#) Copyright (c) 1987 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)fstat.c	5.12 (2.11BSD) 2024/9/20";
+  #endif
+  
+  /*
+***************
+*** 56,63 ****
+  
+  #define	N_KMEM	"/dev/kmem"
+  #define	N_MEM	"/dev/mem"
+! #define	N_SWAP	"/dev/drum"
+! #define	N_UNIX	"/vmunix"
+  
+  #define	TEXT	-2
+  #define	WD	-1
+--- 56,63 ----
+  
+  #define	N_KMEM	"/dev/kmem"
+  #define	N_MEM	"/dev/mem"
+! #define	N_SWAP	"/dev/swap"
+! #define	N_UNIX	"/unix"
+  
+  #define	TEXT	-2
+  #define	WD	-1
+*** ./usr/src/usr.bin/fstat/Makefile.old	Tue Nov 19 22:44:42 1996
+--- ./usr/src/usr.bin/fstat/Makefile	Fri Sep 27 19:16:51 2024
+***************
+*** 1,7 ****
+  #
+  # Public Domain.  1996/11/16 - Steven Schultz
+  #
+! #	@(#)Makefile	1.0 (2.11BSD) 1996/11/16
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+--- 1,7 ----
+  #
+  # Public Domain.  1996/11/16 - Steven Schultz
+  #
+! #	@(#)Makefile	1.1 (2.11BSD) 2024/9/27
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+***************
+*** 24,30 ****
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: fstat
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o bin -g kmem -m 2755 fstat ${DESTDIR}/usr/bin/fstat
+  
+--- 24,30 ----
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: fstat fstat.0
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o bin -g kmem -m 2755 fstat ${DESTDIR}/usr/bin/fstat
+  
+*** ./usr/src/usr.bin/iostat.c.old	Mon Jan  8 22:19:17 1996
+--- ./usr/src/usr.bin/iostat.c	Fri Sep 20 14:12:00 2024
+***************
+*** 1,5 ****
+  #if	!defined(lint) && defined(DOSCCS)
+! static	char *sccsid = "@(#)iostat.c	4.16 (2.11BSD) 1996/1/8";
+  #endif
+  
+  /*
+--- 1,5 ----
+  #if	!defined(lint) && defined(DOSCCS)
+! static	char *sccsid = "@(#)iostat.c	4.17 (2.11BSD) 2024/9/20";
+  #endif
+  
+  /*
+***************
+*** 82,90 ****
+  	long t;
+  	char *arg, **cp, name[6], buf[BUFSIZ];
+  
+! 	nlist("/vmunix", nl);
+  	if(nl[X_DK_BUSY].n_type == 0) {
+! 		printf("dk_busy not found in /vmunix namelist\n");
+  		exit(1);
+  	}
+  	mf = open("/dev/kmem", 0);
+--- 82,90 ----
+  	long t;
+  	char *arg, **cp, name[6], buf[BUFSIZ];
+  
+! 	nlist("/unix", nl);
+  	if(nl[X_DK_BUSY].n_type == 0) {
+! 		printf("dk_busy not found in /unix namelist\n");
+  		exit(1);
+  	}
+  	mf = open("/dev/kmem", 0);
+*** ./usr/src/usr.sbin/rwhod/rwhod.8.old	Sat Nov 16 23:01:09 1996
+--- ./usr/src/usr.sbin/rwhod/rwhod.8	Fri Sep 20 14:12:31 2024
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)rwhod.8	6.2.1 (2.11BSD) 1996/11/16
+  .\"
+! .TH RWHOD 8 "November 16, 1996"
+  .UC 5
+  .SH NAME
+  rwhod \- system status server
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)rwhod.8	6.3 (2.11BSD) 2024/9/20
+  .\"
+! .TH RWHOD 8 "Sep 20, 2024"
+  .UC 5
+  .SH NAME
+  rwhod \- system status server
+***************
+*** 93,104 ****
+  .PP
+  Status messages are generated approximately once every
+  3 minutes.
+- .I Rwhod
+- performs an
+- .IR nlist (3)
+- on /vmunix every 30 minutes to guard against
+- the possibility that this file is not the system
+- image currently operating.
+  .SH "SEE ALSO"
+  rwho(1),
+  ruptime(1)
+--- 93,98 ----
+*** ./usr/src/usr.sbin/rwhod/Makefile.old	Sat Nov 16 22:59:57 1996
+--- ./usr/src/usr.sbin/rwhod/Makefile	Thu Sep 26 19:59:14 2024
+***************
+*** 1,7 ****
+  #
+  # Public Domain.  1996/11/16 - Steven Schultz
+  #
+! #	@(#)Makefile	1.0 (2.11BSD) 1996/11/16
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+--- 1,7 ----
+  #
+  # Public Domain.  1996/11/16 - Steven Schultz
+  #
+! #	@(#)Makefile	1.1 (2.11BSD) 2024/9/26
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+***************
+*** 24,30 ****
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: rwhod
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o root -g bin -m 755 rwhod ${DESTDIR}/usr/sbin/rwhod
+  
+--- 24,30 ----
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: rwhod rwhod.0
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o root -g bin -m 755 rwhod ${DESTDIR}/usr/sbin/rwhod
+  
+*** ./usr/src/usr.sbin/syslogd/syslogd.c.old	Tue Aug 17 01:17:53 1999
+--- ./usr/src/usr.sbin/syslogd/syslogd.c	Sat Sep 28 08:11:17 2024
+***************
+*** 9,15 ****
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)syslogd.c	5.13.6 (2.11BSD) 1999/6/18";
+  #endif
+  
+  /*
+--- 9,15 ----
+  "@(#) Copyright (c) 1983 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)syslogd.c	5.13.7 (2.11BSD) 2024/9/28";
+  #endif
+  
+  /*
+***************
+*** 421,427 ****
+  	time_t now;
+  
+  	(void) time(&now);
+! 	(void) sprintf(line, "%.15s vmunix: ", ctime(&now) + 4);
+  	lp = line + strlen(line);
+  	for (p = msg; *p != '\0'; ) {
+  		flags = SYNC_FILE;	/* fsync file after write */
+--- 421,427 ----
+  	time_t now;
+  
+  	(void) time(&now);
+! 	(void) sprintf(line, "%.15s unix: ", ctime(&now) + 4);
+  	lp = line + strlen(line);
+  	for (p = msg; *p != '\0'; ) {
+  		flags = SYNC_FILE;	/* fsync file after write */
+*** ./usr/src/usr.sbin/syslogd/Makefile.old	Sat Nov 16 17:38:51 1996
+--- ./usr/src/usr.sbin/syslogd/Makefile	Sat Sep 28 08:11:56 2024
+***************
+*** 24,30 ****
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: syslogd
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o root -g bin -m 755 syslogd ${DESTDIR}/usr/sbin/syslogd
+  
+--- 24,30 ----
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: syslogd syslogd.0
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o root -g bin -m 755 syslogd ${DESTDIR}/usr/sbin/syslogd
+  
+*** ./usr/src/usr.sbin/bad144/bad144.c.old	Fri Jan 21 14:17:48 2022
+--- ./usr/src/usr.sbin/bad144/bad144.c	Thu Sep 26 20:14:07 2024
+***************
+*** 1,5 ****
+  #if     !defined(lint) && defined(DOSCCS)
+! static char *sccsid = "@(#)bad144.c 1.2 (2.11BSD) 2022/1/21";
+  #endif
+  /*
+   * bad144
+--- 1,5 ----
+  #if     !defined(lint) && defined(DOSCCS)
+! static char *sccsid = "@(#)bad144.c 1.3 (2.11BSD) 2024/9/20";
+  #endif
+  /*
+   * bad144
+***************
+*** 24,29 ****
+--- 24,37 ----
+   * RP07 entry added August 10, 1993 (thanks to Johnny Billquist) - SMS
+   *
+   * lseek() replaced tell() - Jan 21, 1994 - SMS
++  *
++  * When disklabels were introducted the partition spanning the entire disk
++  * should have been changed from 'h' to 'c' - Sep 20, 2024 - SMS
++  *
++  * disktab(5) has been cleaned up and some measure of sanity imposed.  The 
++  * entries in disktab(5) for drives supported by bad144 have been changed 
++  * to use 'c' to span the entire drive and the 'h' partiton as an unused 
++  * partition that spans the drive excluding the last cylinder.
+   */
+  #include <sys/param.h>
+  #ifndef BADSECT
+***************
+*** 89,95 ****
+  	fprintf(stderr, "\n");
+  	exit(1);
+  found:
+! 	sprintf(name, "/dev/r%sh", argv[1]);
+  	argc -= 2;
+  	argv += 2;
+  	if (argc == 0) {
+--- 97,103 ----
+  	fprintf(stderr, "\n");
+  	exit(1);
+  found:
+! 	sprintf(name, "/dev/r%sc", argv[1]);
+  	argc -= 2;
+  	argv += 2;
+  	if (argc == 0) {
+*** ./usr/src/usr.sbin/bad144/bad144.8.old	Fri Feb 20 01:11:58 1987
+--- ./usr/src/usr.sbin/bad144/bad144.8	Wed Sep 25 14:11:04 2024
+***************
+*** 9,15 ****
+  bad ...
+  ] ]
+  .SH DESCRIPTION
+! .I Bad144
+  can be used to inspect the information stored on a disk that is used by
+  the disk drivers to implement bad sector forwarding.  The format of
+  the information is specified by DEC standard 144, as follows.
+--- 9,15 ----
+  bad ...
+  ] ]
+  .SH DESCRIPTION
+! .I bad144
+  can be used to inspect the information stored on a disk that is used by
+  the disk drivers to implement bad sector forwarding.  The format of
+  the information is specified by DEC standard 144, as follows.
+***************
+*** 26,32 ****
+  sector it corresponds to.
+  .PP
+  The bad sector information and replacement sectors are conventionally
+! only accessible through the ``h'' file system partition of the disk.  If
+  that partition is used for a file system, the user is responsible for
+  making sure that it does not overlap the bad sector information or any
+  replacement sectors.
+--- 26,32 ----
+  sector it corresponds to.
+  .PP
+  The bad sector information and replacement sectors are conventionally
+! only accessible through the ``c'' file system partition of the disk.  If
+  that partition is used for a file system, the user is responsible for
+  making sure that it does not overlap the bad sector information or any
+  replacement sectors.
+*** ./usr/src/usr.sbin/bad144/Makefile.old	Tue Nov 19 22:25:56 1996
+--- ./usr/src/usr.sbin/bad144/Makefile	Thu Sep 26 20:02:37 2024
+***************
+*** 24,30 ****
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: bad144
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o root -g bin -m 755 bad144 ${DESTDIR}/usr/sbin/bad144
+  
+--- 24,30 ----
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: bad144 bad144.0
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o root -g bin -m 755 bad144 ${DESTDIR}/usr/sbin/bad144
+  
+*** ./usr/src/usr.sbin/arp/arp.c.old	Mon Jan 10 23:53:12 1994
+--- ./usr/src/usr.sbin/arp/arp.c	Fri Sep 20 14:13:33 2024
+***************
+*** 1,5 ****
+  #if	defined(DOSCCS) && !defined(lint)
+! static	char *sccsid = "@(#)arp.c	5.4.1 (2.11BSD GTE) 1/1/94";
+  #endif
+  
+  /*
+--- 1,5 ----
+  #if	defined(DOSCCS) && !defined(lint)
+! static	char *sccsid = "@(#)arp.c	5.5 (2.11BSD) 2024/9/20";
+  #endif
+  
+  /*
+***************
+*** 254,260 ****
+  };
+  
+  #ifdef pdp11
+! char	unix2_10[] = "/vmunix";
+  u_int	base2_10;
+  struct nlist kl[] = {
+  #define	X_NETDATA	0
+--- 254,260 ----
+  };
+  
+  #ifdef pdp11
+! char	unix2_10[] = "/unix";
+  u_int	base2_10;
+  struct nlist kl[] = {
+  #define	X_NETDATA	0
+***************
+*** 374,380 ****
+  usage()
+  {
+  	printf("Usage: arp hostname\n");
+! 	printf("       arp -a [/vmunix] [/dev/kmem]\n");
+  	printf("       arp -d hostname\n");
+  	printf("       arp -s hostname ether_addr [temp] [pub] [trail]\n");
+  	printf("       arp -f filename\n");
+--- 374,380 ----
+  usage()
+  {
+  	printf("Usage: arp hostname\n");
+! 	printf("       arp -a [/unix] [/dev/kmem]\n");
+  	printf("       arp -d hostname\n");
+  	printf("       arp -s hostname ether_addr [temp] [pub] [trail]\n");
+  	printf("       arp -f filename\n");
+*** ./usr/src/usr.sbin/arp/arp.8.old	Sun Dec 14 17:08:49 1986
+--- ./usr/src/usr.sbin/arp/arp.8	Fri Sep 20 14:15:52 2024
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)arp.8c	6.2 (Berkeley) 5/20/86
+  .\"
+! .TH ARP 8C "May 20, 1986"
+  .UC 6
+  .SH NAME
+  arp \- address resolution display and control
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)arp.8c	6.3 (2.11BSD) 2024/9/20
+  .\"
+! .TH ARP 8C "Sep 20, 2024"
+  .UC 6
+  .SH NAME
+  arp \- address resolution display and control
+***************
+*** 14,20 ****
+  .br
+  .B arp -a
+  [
+! .I vmunix
+  ] [
+  .I kmem
+  ]
+--- 14,20 ----
+  .br
+  .B arp -a
+  [
+! .I unix
+  ] [
+  .I kmem
+  ]
+***************
+*** 51,58 ****
+  from the file
+  .I kmem
+  (default /dev/kmem) based on the kernel file 
+! .I vmunix 
+! (default /vmunix).
+  .LP
+  With the
+  .B -d
+--- 51,58 ----
+  from the file
+  .I kmem
+  (default /dev/kmem) based on the kernel file 
+! .I unix 
+! (default /unix).
+  .LP
+  With the
+  .B -d
+***************
+*** 98,101 ****
+  .LP
+  with argument meanings as given above.
+  .SH "SEE ALSO"
+! inet(3N), arp(4P), ifconfig(8C)
+--- 98,101 ----
+  .LP
+  with argument meanings as given above.
+  .SH "SEE ALSO"
+! inet(4), arp(4), ifconfig(8)
+*** ./usr/src/usr.sbin/arp/Makefile.old	Tue Nov 19 22:45:42 1996
+--- ./usr/src/usr.sbin/arp/Makefile	Thu Sep 26 20:01:19 2024
+***************
+*** 1,7 ****
+  #
+  # Public Domain.  1996/11/16 - Steven Schultz
+  #
+! #	@(#)Makefile	1.0 (2.11BSD) 1996/11/16
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+--- 1,7 ----
+  #
+  # Public Domain.  1996/11/16 - Steven Schultz
+  #
+! #	@(#)Makefile	1.1 (2.11BSD) 2024/9/26
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+***************
+*** 24,30 ****
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: arp
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o bin -g kmem -m 2755 arp ${DESTDIR}/usr/sbin/arp
+  
+--- 24,30 ----
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: arp arp.0
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+  	install -s -o bin -g kmem -m 2755 arp ${DESTDIR}/usr/sbin/arp
+  
+*** ./usr/src/usr.sbin/pstat/pstat.c.old	Wed Dec 31 10:46:56 2008
+--- ./usr/src/usr.sbin/pstat/pstat.c	Sat Sep 28 07:43:46 2024
+***************
+*** 10,16 ****
+  "@(#) Copyright (c) 1980 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)pstat.c	5.8.6 (2.11BSD) 1999/9/13";
+  #endif
+  
+  /*
+--- 10,16 ----
+  "@(#) Copyright (c) 1980 Regents of the University of California.\n\
+   All rights reserved.\n";
+  
+! static char sccsid[] = "@(#)pstat.c	5.9 (2.11BSD) 2024/9/28";
+  #endif
+  
+  /*
+***************
+*** 37,43 ****
+  
+  char	*fcore	= "/dev/kmem";
+  char	*fmem	= "/dev/mem";
+! char	*fnlist	= "/vmunix";
+  int	fc, fm;
+  
+  struct nlist nl[] = {
+--- 37,43 ----
+  
+  char	*fcore	= "/dev/kmem";
+  char	*fmem	= "/dev/mem";
+! char	*fnlist	= "/unix";
+  int	fc, fm;
+  
+  struct nlist nl[] = {
+*** ./usr/src/usr.sbin/pstat/pstat.8.old	Wed Dec 31 10:46:55 2008
+--- ./usr/src/usr.sbin/pstat/pstat.8	Sat Sep 28 07:47:03 2024
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)pstat.8	6.3.2 (2.11BSD) 1997/9/2
+  .\"
+! .TH PSTAT 8 "December 28, 2008"
+  .UC 4
+  .SH NAME
+  pstat \- print system facts
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)pstat.8	6.4 (2.11BSD) 2024/9/28
+  .\"
+! .TH PSTAT 8 "September 28, 2024"
+  .UC 4
+  .SH NAME
+  pstat \- print system facts
+***************
+*** 27,33 ****
+  in
+  .I /dev/kmem.
+  The required namelist is taken from
+! .I /vmunix
+  unless 
+  .I system
+  is specified.
+--- 27,33 ----
+  in
+  .I /dev/kmem.
+  The required namelist is taken from
+! .I /unix
+  unless 
+  .I system
+  is specified.
+***************
+*** 408,414 ****
+  system is under heavy load.
+  .SH FILES
+  .ta \w'/dev/kmem  'u
+! /vmunix	namelist
+  .br
+  /dev/kmem	default source of tables
+  .SH SEE ALSO
+--- 408,414 ----
+  system is under heavy load.
+  .SH FILES
+  .ta \w'/dev/kmem  'u
+! /unix	namelist
+  .br
+  /dev/kmem	default source of tables
+  .SH SEE ALSO
+***************
+*** 424,428 ****
+  .SH BUGS
+  It would be very useful if the system recorded \*(lqmaximum occupancy\*(rq
+  on the tables reported by
+! .B \-T;
+! even more useful if these tables were dynamically allocated.
+--- 424,427 ----
+  .SH BUGS
+  It would be very useful if the system recorded \*(lqmaximum occupancy\*(rq
+  on the tables reported by
+! .B \-T
+*** ./usr/src/sys/pdpuba/si.c.old	Fri Apr 14 01:15:53 1995
+--- ./usr/src/sys/pdpuba/si.c	Thu Sep 26 08:38:36 2024
+***************
+*** 3,9 ****
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)si.c	1.5 (2.11BSD GTE) 1995/04/13
+   */
+  
+  /*
+--- 3,9 ----
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)si.c	1.6 (2.11BSD) 2024/9/26
+   */
+  
+  /*
+***************
+*** 30,41 ****
+  #define	SI_NSECT	32
+  #define	SI_NTRAC	19
+  
+- #if NXPD > 0
+- extern struct size {
+- 	daddr_t	nblocks;
+- 	int	cyloff;
+- } rm5_sizes[8];
+- #else !NXPD
+  /*
+   * We reserve room for bad block forwarding information even though this
+   * driver doesn't support bad block forwarding.  This allows us to simply
+--- 30,35 ----
+***************
+*** 54,60 ****
+  	165826,	550,	/* g: cyl 550 - 822, reserve 1 track + 126 */
+  	500384,	  0,	/* h: cyl   0 - 822 */
+  };
+- #endif NXPD
+  
+  struct	sidevice *SIADDR;
+  
+--- 48,53 ----
+*** ./usr/src/sys/h/systm.h.old	Thu May  9 22:39:34 1996
+--- ./usr/src/sys/h/systm.h	Sat Sep 28 07:54:47 2024
+***************
+*** 3,9 ****
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)systm.h	1.3 (2.11BSD GTE) 1996/5/9
+   */
+  
+  #ifndef SUPERVISOR
+--- 3,9 ----
+   * All rights reserved.  The Berkeley software License Agreement
+   * specifies the terms and conditions for redistribution.
+   *
+!  *	@(#)systm.h	1.4 (2.11BSD) 2024/9/28
+   */
+  
+  #ifndef SUPERVISOR
+***************
+*** 30,36 ****
+   * (/etc/rc.local) using sysctl(8). If it is desired to run the system
+   * in level 0 mode while multiuser, initialize the variable securelevel
+   * in /sys/kern/kern_sysctl.c to -1. Note that it is NOT initialized to
+!  * zero as that would allow the vmunix binary to be patched to -1.
+   * Without initialization, securelevel loads in the BSS area which only
+   * comes into existence when the kernel is loaded and hence cannot be
+   * patched by a stalking hacker.
+--- 30,36 ----
+   * (/etc/rc.local) using sysctl(8). If it is desired to run the system
+   * in level 0 mode while multiuser, initialize the variable securelevel
+   * in /sys/kern/kern_sysctl.c to -1. Note that it is NOT initialized to
+!  * zero as that would allow the unix binary to be patched to -1.
+   * Without initialization, securelevel loads in the BSS area which only
+   * comes into existence when the kernel is loaded and hence cannot be
+   * patched by a stalking hacker.
+*** ./usr/src/etc/disktab.old	Tue Aug 30 08:42:34 2022
+--- ./usr/src/etc/disktab	Thu Sep 26 08:15:19 2024
+***************
+*** 1,4 ****
+! #	@(#)disktab	1.4 (2.11BSD) 2022/8/30
+  #
+  # Disk geometry and partition layout tables. 
+  # Key:
+--- 1,4 ----
+! #	@(#)disktab	2.0 (2.11BSD) 2024/9/25
+  #
+  # Disk geometry and partition layout tables. 
+  # Key:
+***************
+*** 26,186 ****
+  #	b[a-h]	partition block sizes in bytes
+  #	f[a-h]	partition fragment sizes in bytes
+  #	t[a-h]	partition types (filesystem, swap, etc)
+- #
+- # On drives that contain bad-sector replacement areas the 'h' (and in some
+- # cases 'c') partitions do NOT overlap the bad-sector track.
+- #
+- # Entries may also be used for other compatible drives
+- # with the same geometry.
+  
+  #
+  # Drives on xp
+  #
+! # These partition tables are a mess.  Several of them overlap the bad
+! # sector area, others do not overlap but end up with not cylinder sized
+! # filesystems.  Many of these aren't even in use any longer.  A couple 
+! # did not even match the tables that were in the kernel.
+  #
+- # I've done my best to match these up with the old partition tables in
+- # the 'xp' driver but a typo or arithmetic error could easily have crept in.
+- #
+  
+! # RM02/03 - 'c' and 'h' partitions are whole drive except bad sector track.
+  #	
+  rm02|RM02|rm03|RM03|DEC RM02/03:\
+  	:ty=removable:ns#32:nt#5:nc#823:sf:\
+  	:b0=/mdec/rm03uboot:\
+! 	:pa#9600:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#9600:ob#9600:bb#1024:fb#1024:tb=swap:\
+! 	:pc#131520:oc#0:bc#1024:fc#1024:\
+! 	:pf#121920:of#9600:bf#1024:ff#1024:tf=2.11BSD:\
+! 	:pg#112320:og#19200:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#131520:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+! # RM05:
+! rm05|RM05|cdc9766|CDC9766|9766|DEC RM05, CDC 9766:\
+  	:ty=removable:ns#32:nt#19:nc#823:sf:\
+  	:b0=/mdec/rm05uboot:\
+! 	:pa#9120:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#9120:ob#9120:bb#1024:fb#1024:tb=swap:\
+! 	:pc#234080:oc#18240:bc#1024:fc#1024:tc=2.11BSD:\
+! 	:pd#247906:od#252320:bd#1024:fd#1024:td=2.11BSD:\
+! 	:pe#164160:oe#18240:be#1024:fe#1024:te=2.11BSD:\
+! 	:pf#152000:of#182400:bf#1024:ff#1024:tf=2.11BSD:\
+! 	:pg#165826:og#334400:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#500226:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+- 9775|CDC 9775:\
+- 	:ty=fixed:ns#32:nt#40:nc#842:sf:\
+- 	:pa#10240:oa#0:ba#1024:fa#1024:ty=2.11BSD:\
+- 	:pb#10240:ob#10240:bb#1024:fb#1024:tb=swap:\
+- 	:pc#510720:oc#20480:bc#1024:fc#1024:tc=2.11BSD:\
+- 	:pd#541440:od#531200:bd#1024:fd#1024:td=2.11BSD:\
+- 	:pe#363520:oe#20480:be#1024:fe#1024:te=2.11BSD:\
+- 	:pf#320000:of#384000:bf#1024:ff#1024:tf=2.11BSD:\
+- 	:pg#368640:og#704000:bg#1024:fg#1024:tg=2.11BSD:\
+- 	:ph#1072640:oh#0:bh#1024:fh#1024:th=2.11BSD
+- 
+- # EATON BR1537 or 1711 controller.  The CSR set looks like an RP03,
+- # that's about all.
+- #
+- br1538d|BR1538D|EATON 1538D, 1711:\
+- 	:ty=removable:ns#32:nt#19:nc#815:so:\
+- 	:b0=/mdec/bruboot:\
+- 	:pa#18240:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+- 	:pb#12160:ob#18240:bb#1024:fb#1024:tb=swap:\
+- 	:pc#232256:oc#30400:bc#1024:fc#1024:tc=2.11BSD:\
+- 	:pd#232256:od#262656:bd#4096:fd#1024:td=2.11BSD:\
+- 	:ph#494912:oh#0:bh#1024:fh#1024:th=2.11BSD
+- 
+  rp04|RP04|rp05|RP05|DEC RP04/05:\
+  	:ty=removable:ns#22:nt#19:nc#411:sf:\
+  	:b0=/mdec/hpuboot:\
+! 	:pa#9614:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#8778:ob#9614:bb#1024:fb#1024:tb=swap:\
+! 	:pc#152988:oc#18392:bc#1024:fc#1024:tc=2.11BSD:\
+! 	:pg#171650:og#0:bg#1024:fg#1024:tg=2.11BSD
+  
+  rp06|RP06|DEC RP06:\
+  	:ty=removable:ns#22:nt#19:nc#815:sf:\
+  	:b0=/mdec/hpuboot:\
+! 	:pa#9614:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#8778:ob#9614:bb#1024:fb#1024:tb=swap:\
+! 	:pc#153406:oc#18392:bc#1024:fc#1024:tc=2.11BSD:\
+! 	:pd#168724:od#171798:bd#1024:fd#1024:td=2.11BSD:\
+! 	:pe#322130:oe#18392:be#1024:fe#1024:te=2.11BSD:\
+! 	:pg#171798:og#0:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#340522:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+  rp07|RP07|DEC RP07:\
+  	:ty=fixed:ns#50:nt#32:nc#630:sf:\
+  	:b0=/mdec/rp07uboot:\
+! 	:pa#19200:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#51200:ob#19200:bb#1024:fb#1024:tb=swap:\
+! 	:pc#1006400:oc#0:bc#1024:fc#1024:\
+! 	:pd#320000:od#70400:bd#1024:fd#1024:td=2.11BSD:\
+! 	:pe#320000:oe#390400:be#1024:fe#1024:te=2.11BSD:\
+! 	:pf#296000:of#710400:bf#1024:ff#1024:tf=2.11BSD:\
+! 	:pg#936000:og#70400:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#1006400:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+! rm2x|160|fuji|fuji160|Fujitsu 160:\
+  	:ty=fixed:ns#32:nt#10:nc#823:sf:\
+  	:b0=/mdec/si94uboot:\
+! 	:pa#9600:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#9600:ob#9600:bb#1024:fb#1024:tb=swap:\
+! 	:pc#244160:oc#19200:bc#1024:fc#1024:tc=2.11BSD:\
+! 	:pd#164800:od#19200:bd#1024:fd#1024:td=unused:\
+! 	:pe#79360:oe#184000:be#1024:fe#1024:te=unused:\
+! 	:pf#39680:of#184000:bf#1024:ff#1024:tf=unused:\
+! 	:pg#39680:og#223680:bg#1024:fg#1024:tg=unused:\
+! 	:ph#263360:oh#0:bh#1024:fh#1024:th=unused
+  
+! diva|DIVA|9300|Diva Comp V, Ampex 9300 (in direct mode):\
+  	:ty=fixed:ns#33:nt#19:nc#815:sf:\
+  	:b0=/mdec/dvhpuboot:\
+! 	:pa#9405:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#9405:ob#9405:bb#1024:fb#1024:tb=swap:\
+! 	:pc#241395:oc#18810:bc#1024:fc#1024:tc=2.11BSD:\
+! 	:pd#250641:od#260205:bd#1024:fd#1024:td=2.11BSD:\
+! 	:pe#169290:oe#18810:be#1024:fe#1024:te=2.11BSD:\
+! 	:pf#156750:of#188100:bf#1024:ff#1024:tf=2.11BSD:\
+! 	:pg#165996:og#344850:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#510846:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+- 330|capricorn|Capricorn|Ampex Capricorn:\
+- 	:ty=fixed:ns#32:nt#16:nc#1024:sf:\
+- 	:pa#16384:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+- 	:pb#33792:ob#16384:bb#1024:fb#1024:tb=swap:\
+- 	:pc#291840:oc#50176:bc#1024:fc#1024:tc=2.11BSD:\
+- 	:pd#16384:od#342016:bd#4096:fd#1024:td=2.11BSD:\
+- 	:pe#56320:oe#358400:be#1024:fe#1024:te=2.11BSD:\
+- 	:pf#107008:of#414720:bf#1024:ff#1024:tf=2.11BSD:\
+- 	:pg#179712:og#342016:bg#1024:fg#1024:tg=2.11BSD:\
+- 	:ph#521728:bh#1024:fh#1024:th=2.11BSD
+- 
+  si_eagle|SI_Eagle|2351|2351A|Fujitsu Eagle 2351A (48 sectors):\
+  	:ty=fixed:ns#48:nt#20:nc#842:rm#3961:sf:\
+  	:b0=/mdec/si51uboot:\
+! 	:pa#11520:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#11520:ob#11520:bb#1024:fb#1024:tb=swap:\
+! 	:pc#474240:oc#23040:bc#1024:fc#1024:tc=2.11BSD:\
+! 	:pd#92160:od#497280:bd#1024:fd#1024:td=2.11BSD:\
+! 	:pe#218880:oe#589440:be#1024:fd#1024:te=2.11BSD:\
+! 	:ph#803520:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+- si9766|si9766|CDC 9766 on SI 9500 controller:\
+- 	:ty=removable:ns#32:nt#19:nc#823:sf:\
+- 	:b0=/mdec/si95uboot:\
+- 	:pa#9120:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+- 	:pb#9120:ob#9120:bb#1024:fb#1024:tb=swap:\
+- 	:pc#234080:oc#18240:bc#1024:fc#1024:tc=2.11BSD:\
+- 	:pd#244866:od#252320:bd#4096:fd#1024:td=2.11BSD:\
+- 	:pe#164160:oe#18240:be#1024:fe#1024:te=2.11BSD:\
+- 	:pf#152000:of#182400:bf#1024:ff#1024:tf=2.11BSD:\
+- 	:pg#162786:og#334400:bg#1024:fg#1024:tg=2.11BSD:\
+- 	:ph#497344:oh#0:bh#1024:fh#1024:th=2.11BSD
+- 
+  rk06|RK06|DEC RK06:\
+  	:ty=removable:ns#22:nt#3:nc#411:sf:\
+  	:b0=/mdec/hkuboot:\
+--- 26,123 ----
+  #	b[a-h]	partition block sizes in bytes
+  #	f[a-h]	partition fragment sizes in bytes
+  #	t[a-h]	partition types (filesystem, swap, etc)
+  
++ # On drives that contain bad-sector replacement areas the 'h' partition
++ # does NOT overlap the bad-sector track.  However the 'c' partition DOES
++ # contain the bad-sector track to match bad144's internal disk size table.
+  #
++ # Values in this file are used as default values for disklabel(8), not by
++ # the kernel, and have no effect on currently labeled (or in use) disk volumes.
++ 
+  # Drives on xp
+  #
+! # These partition tables were a mess.  Sane settings have been created.  The
+! # 'c' partition spans the entire disk while the 'h' partition excludes 
+! # the final track.  IF one large partition is desired use "disklabel -e" and
+! # set 'h' to 2.11BSD and remove the others (or set to "unused").
+  #
+  
+! # RM02/03
+  #	
+  rm02|RM02|rm03|RM03|DEC RM02/03:\
+  	:ty=removable:ns#32:nt#5:nc#823:sf:\
+  	:b0=/mdec/rm03uboot:\
+! 	:pa#12160:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#12160:ob#12160:bb#1024:fb#1024:tb=swap:\
+! 	:pc#131680:oc#0:bc#1024:fc#1024:\
+! 	:pg#107200:og#24320:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#131520:oh#0:bh#1024:fh#1024
+  
+! # RM05
+! rm05|RM05|cdc9766|CDC9766:\
+  	:ty=removable:ns#32:nt#19:nc#823:sf:\
+  	:b0=/mdec/rm05uboot:\
+! 	:pa#12160:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#12160:ob#12160:bb#1024:fb#1024:tb=swap:\
+! 	:pc#500384:oc#0:bc#1024:fc#1024:\
+! 	:pg#475456:og#24320:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#499776:oh#0:bh#1024:fh#1024
+  
+  rp04|RP04|rp05|RP05|DEC RP04/05:\
+  	:ty=removable:ns#22:nt#19:nc#411:sf:\
+  	:b0=/mdec/hpuboot:\
+! 	:pa#12540:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#8778:ob#12540:bb#1024:fb#1024:tb=swap:\
+! 	:pc#171798:oc#0:bc#1024:fc#1024:\
+! 	:pg#150062:og#21318:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#171380:oh#0:bh#1024:fh#1024
+  
+  rp06|RP06|DEC RP06:\
+  	:ty=removable:ns#22:nt#19:nc#815:sf:\
+  	:b0=/mdec/hpuboot:\
+! 	:pa#12540:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#8778:ob#12540:bb#1024:fb#1024:tb=swap:\
+! 	:pc#340670:oc#0:bc#1024:fc#1024:\
+! 	:pg#318934:og#21318:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#340252:oh#0:bh#1024:fh#1024
+  
+  rp07|RP07|DEC RP07:\
+  	:ty=fixed:ns#50:nt#32:nc#630:sf:\
+  	:b0=/mdec/rp07uboot:\
+! 	:pa#14400:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#9600:ob#14400:bb#1024:fb#1024:tb=swap:\
+! 	:pc#1008000:oc#0:bc#1024:fc#1024:\
+! 	:pf#491200:of#24000:bf#1024:ff#1024:tf=2.11BSD:\
+! 	:pg#491200:og#515200:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#1006400:oh#0:bh#1024:fh#1024
+  
+! rm2x|fuji160|Fujitsu 160:\
+  	:ty=fixed:ns#32:nt#10:nc#823:sf:\
+  	:b0=/mdec/si94uboot:\
+! 	:pa#12800:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#9600:ob#12800:bb#1024:fb#1024:tb=swap:\
+! 	:pc#263360:oc#0:bc#1024:fc#1024:\
+! 	:pg#240640:og#22400:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#263360:oh#0:bh#1024:fh#1024
+  
+! diva|DIVA|ampex9300|Diva Comp V, Ampex 9300 (in direct mode):\
+  	:ty=fixed:ns#33:nt#19:nc#815:sf:\
+  	:b0=/mdec/dvhpuboot:\
+! 	:pa#12540:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#10032:ob#12540:bb#1024:fb#1024:tb=swap:\
+! 	:pc#511005:oc#0:bc#1024:fc#1024:\
+! 	:pg#487806:og#22572:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#510378:oh#0:bh#1024:fh#1024
+  
+  si_eagle|SI_Eagle|2351|2351A|Fujitsu Eagle 2351A (48 sectors):\
+  	:ty=fixed:ns#48:nt#20:nc#842:rm#3961:sf:\
+  	:b0=/mdec/si51uboot:\
+! 	:pa#12480:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+! 	:pb#11520:ob#12480:bb#1024:fb#1024:tb=swap:\
+! 	:pc#808320:oc#0:bc#1024:fc#1024:\
+! 	:pg#779520:og#24000:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#803520:oh#0:bh#1024:fh#1024
+  
+  rk06|RK06|DEC RK06:\
+  	:ty=removable:ns#22:nt#3:nc#411:sf:\
+  	:b0=/mdec/hkuboot:\
+***************
+*** 188,194 ****
+  	:pb#8316:ob#8316:bb#1024:fb#1024:tb=swap:\
+  	:pc#27126:oc#0:bc#1024:fc#1024:tc=unused:\
+  	:pg#10428:og#16632:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#27060:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+  rk07|RK07|DEC RK07:\
+  	:ty=removable:ns#22:nt#3:nc#815:sf:bt=hkuboot:\
+--- 125,131 ----
+  	:pb#8316:ob#8316:bb#1024:fb#1024:tb=swap:\
+  	:pc#27126:oc#0:bc#1024:fc#1024:tc=unused:\
+  	:pg#10428:og#16632:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#27060:oh#0:bh#1024:fh#1024
+  
+  rk07|RK07|DEC RK07:\
+  	:ty=removable:ns#22:nt#3:nc#815:sf:bt=hkuboot:\
+***************
+*** 197,203 ****
+  	:pb#8316:ob#8316:bb#1024:fb#1024:tb=swap:\
+  	:pc#53790:oc#0:bc#1024:fc#1024:tc=unused:\
+  	:pg#37092:og#16632:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#53724:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+  # The RL02 and RL01 have 256 byte sectors,  getdiskbyname ignores 'se' 
+  # (thankfully) but partitions are still in units of 512-byte sectors.
+--- 134,140 ----
+  	:pb#8316:ob#8316:bb#1024:fb#1024:tb=swap:\
+  	:pc#53790:oc#0:bc#1024:fc#1024:tc=unused:\
+  	:pg#37092:og#16632:bg#1024:fg#1024:tg=2.11BSD:\
+! 	:ph#53724:oh#0:bh#1024:fh#1024
+  
+  # The RL02 and RL01 have 256 byte sectors,  getdiskbyname ignores 'se' 
+  # (thankfully) but partitions are still in units of 512-byte sectors.
+***************
+*** 204,210 ****
+  rl01|RL01|DEC RL01:\
+  	:ty=removable:se#256:ns#20:nt#2:nc#256:\
+  	:b0=/mdec/rluboot:\
+! 	:ph#10240:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+  rl02|RL02|DEC RL02:\
+  	:ty=removable:se#256:ns#20:nt#2:nc#512:\
+--- 141,147 ----
+  rl01|RL01|DEC RL01:\
+  	:ty=removable:se#256:ns#20:nt#2:nc#256:\
+  	:b0=/mdec/rluboot:\
+! 	:pa#10240:oa#0:ba#1024:fa#1024:ta=2.11BSD
+  
+  rl02|RL02|DEC RL02:\
+  	:ty=removable:se#256:ns#20:nt#2:nc#512:\
+***************
+*** 211,290 ****
+  	:b0=/mdec/rluboot:\
+  	:pa#15360:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+  	:pb#5120:ob#15360:bb#1024:fb#1024:tb=swap:\
+! 	:ph#20480:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+  rk05|RK05|DEC RK05:\
+  	:ty=removable:ns#12:nt#2:nc#203:bt=rkuboot:\
+  	:b0=/mdec/rkuboot:\
+! 	:ph#4872:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+  #
+  # Disks on a UDA50
+  #
+  
+- ra60|RA60|DEC RA60 Removable|OLD STYLE PARTITIONS:\
+- 	:dt=MSCP:ty=removable:ns#42:nt#4:nc#2382:so:\
+- 	:b0=/mdec/rauboot:\
+- 	:pa#15884:oa#0ba#1024:fa#1024:ta=2.11BSD:\
+- 	:pb#33440:ob#15884:bb#1024:fb#1024:tb=swap:\
+- 	:pc#193282:oc#49324:bc#1024:fc#1024:tc=2.11BSD:\
+- 	:pd#15884:od#242606:bd#1024:fd#1024:td=2.11BSD:\
+- 	:pe#140686:oe#258490:be#1024:fe#1024:te=2.11BSD:\
+- 	:pg#156570:og#242606:bg#1024:fg#1024:tg=2.11BSD:\
+- 	:ph#399176:oh#0:bh#1024:fh#1024:th=2.11BSD
+- 
+- ra80|RA80|DEC RA80 Winchester|OLD STYLE PARTITIONS:\
+- 	:dt=MSCP:ty=fixed:ns#31:nt#14:nc#559:so:\
+- 	:b0=/mdec/rauboot:\
+- 	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+- 	:pb#33440:ob#15884:bb#1024:fb#1024:tb=swap:\
+- 	:pc#186888:oc#49324:bc#1024:fc#1024:tc=2.11BSD:\
+- 	:ph#236212:oh#0:bh#1024:fh#1024:th=2.11BSD
+- 
+- ra81|RA81|DEC RA81 Winchester|OLD STYLE PARTITIONS:\
+- 	:dt=MSCP:ty=fixed:ns#51:nt#14:nc#1248:so:\
+- 	:b0=/mdec/rauboot:\
+- 	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+- 	:pb#33440:ob#15884:bb#1024:fb#1024:tb=swap:\
+- 	:pc#193282:oc#49324:bc#1024:fc#1024:tc=2.11BSD:\
+- 	:pd#15884:od#242606:bd#1024:fd#1024:td=2.11BSD:\
+- 	:pe#307200:oe#258490:be#1024:fe#1024:te=2.11BSD:\
+- 	:pf#324382:of#565690:bf#1024:ff#1024:tf=2.11BSD:\
+- 	:pg#647466:og#242606:bg#1024:fg#1024:tg=2.11BSD:\
+- 	:ph#890072:oh#0:bh#1024:fh#1024:th=2.11BSD
+- 
+- ra81x|RA81X|Extended DEC RA81 Winchester|OLD STYLE PARTITIONS:\
+- 	:dt=MSCP:ty=fixed:ns#51:nt#14:nc#1815:so:\
+- 	:b0=/mdec/rauboot:\
+- 	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+- 	:pb#33440:ob#15884:bb#1024:fb#1024:tb=swap:\
+- 	:pc#193282:oc#49324:bc#1024:fc#1024:tc=2.11BSD:\
+- 	:pd#15884:od#242606:bd#1024:fd#1024:td=2.11BSD:\
+- 	:pe#307200:oe#258490:be#1024:fe#1024:te=2.11BSD:\
+- 	:pf#728952:of#565690:bf#1024:ff#1024:tf=2.11BSD:\
+- 	:pg#1052036:og#242606:bg#1024:fg#1024:\
+- 	:ph#1294642:oh#0:bh#1024:fh#1024:th=2.11BSD
+- 
+- rd52|RD52|DEC RD52|OLD STYLE PARTITIONS:\
+- 	:dt=MSCP:ty=fixed:ns#18:nt#7:nc#480:so:\
+- 	:b0=/mdec/rauboot:\
+- 	:pa#9700:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+- 	:pb#17300:ob#9700:bb#1024:fb#1024:tb=2.11BSD:\
+- 	:pc#3100:oc#27000:bc#1024:fc#1024:tc=swap:\
+- 	:pd#30348:od#30100:bd#1024:fd#1024:td=2.11BSD:\
+- 	:pg#50748:og#9700:bg#1024:fg#1024:tg=2.11BSD:\
+- 	:ph#60448:oh#0:bh#1024:fh#1024:th=2.11BSD
+- 
+- rd53|RD53||DEC RD53|OLD STYLE PARTITIONS:\
+- 	:dt=MSCP:ty=fixed:ns#18:nt#8:nc#963:so:\
+- 	:b0=/mdec/rauboot:\
+- 	:pa#9700:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+- 	:pb#17300:ob#9700:bb#1024:fb#1024:tb=2.11BSD:\
+- 	:pc#3100:oc#27000:bc#1024:fc#1024:tc=swap:\
+- 	:pd#108540:od#30100:bd#1024:fd#1024:td=2.11BSD:\
+- 	:pg#128940:og#9700:bg#1024:fg#1024:tg=2.11BSD:\
+- 	:ph#138640:oh#0:bh#1024:fh#1024:th=2.11BSD
+- 
+  rc25|RC25|rcf25|RCF25|DEC RC25 and RC25F:\
+  	:dt=MSCP:ty=removable:ns#42:nt#4:nc#2382:so:\
+  	:b0=/mdec/rauboot:\
+--- 148,164 ----
+  	:b0=/mdec/rluboot:\
+  	:pa#15360:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+  	:pb#5120:ob#15360:bb#1024:fb#1024:tb=swap:\
+! 	:pc#20480:oc#0:bc#1024:fc#1024
+  
+  rk05|RK05|DEC RK05:\
+  	:ty=removable:ns#12:nt#2:nc#203:bt=rkuboot:\
+  	:b0=/mdec/rkuboot:\
+! 	:pa#4872:oa#0:ba#1024:fa#1024:ta=2.11BSD
+  
+  #
+  # Disks on a UDA50
+  #
+  
+  rc25|RC25|rcf25|RCF25|DEC RC25 and RC25F:\
+  	:dt=MSCP:ty=removable:ns#42:nt#4:nc#2382:so:\
+  	:b0=/mdec/rauboot:\
+***************
+*** 324,330 ****
+  	:pb#5716:ob#15884:bb#1024:fb#1024:tb=swap:\
+  	:pc#21600:oc#0:bc#1024:fc#1024:tc=2.11BSD
+  
+! rd52new|RD52new|DEC RD52|NEW STYLE PARTITIONS:\
+   	:dt=MSCP:ty=fixed:ns#18:nt#7:nc#480:so:\
+   	:b0=/mdec/rauboot:\
+   	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+--- 198,204 ----
+  	:pb#5716:ob#15884:bb#1024:fb#1024:tb=swap:\
+  	:pc#21600:oc#0:bc#1024:fc#1024:tc=2.11BSD
+  
+! rd52|RD52|DEC RD52:\
+   	:dt=MSCP:ty=fixed:ns#18:nt#7:nc#480:so:\
+   	:b0=/mdec/rauboot:\
+   	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+***************
+*** 332,338 ****
+   	:pc#60480:oc#0:bc#1024:fc#1024:tc=2.11BSD:\
+   	:pg#36236:og#24244:bg#1024:fg#1024:tg=2.11BSD
+  
+! rd53new|RD53new|DEC RD53|NEW STYLE PARTITIONS:\
+   	:dt=MSCP:ty=fixed:ns#17:nt#8:nc#1024:so:\
+   	:b0=/mdec/rauboot:\
+   	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+--- 206,212 ----
+   	:pc#60480:oc#0:bc#1024:fc#1024:tc=2.11BSD:\
+   	:pg#36236:og#24244:bg#1024:fg#1024:tg=2.11BSD
+  
+! rd53|RD53|DEC RD53:\
+   	:dt=MSCP:ty=fixed:ns#17:nt#8:nc#1024:so:\
+   	:b0=/mdec/rauboot:\
+   	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+***************
+*** 368,374 ****
+  	:b0=/mdec/rauboot:\
+  	:pa#800:oa#0:ba#1024:fa#1024:2.11BSD
+  
+! ra60new|RA60new|DEC RA60|NEW STYLE PARTITIONS:\
+   	:dt=MSCP:ty=removable:ns#42:nt#4:nc#2382:so:\
+   	:b0=/mdec/rauboot:\
+   	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+--- 242,248 ----
+  	:b0=/mdec/rauboot:\
+  	:pa#800:oa#0:ba#1024:fa#1024:2.11BSD
+  
+! ra60|RA60|DEC RA60:\
+   	:dt=MSCP:ty=removable:ns#42:nt#4:nc#2382:so:\
+   	:b0=/mdec/rauboot:\
+   	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+***************
+*** 424,430 ****
+          :pg#819200:og#32604:bg#1024:fg#1024:tg=2.11BSD:\
+          :ph#3068686:oh#851804:bh#1024:fh#1024:th=2.11BSD
+  
+! ra80new|RA80new|DEC RA80|NEW STYLE PARTITIONS:\
+   	:dt=MSCP:ty=fixed:ns#31:nt#14:nc#546:so:\
+   	:b0=/mdec/rauboot:\
+   	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+--- 298,304 ----
+          :pg#819200:og#32604:bg#1024:fg#1024:tg=2.11BSD:\
+          :ph#3068686:oh#851804:bh#1024:fh#1024:th=2.11BSD
+  
+! ra80|RA80|DEC RA80:\
+   	:dt=MSCP:ty=fixed:ns#31:nt#14:nc#546:so:\
+   	:b0=/mdec/rauboot:\
+   	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+***************
+*** 432,438 ****
+   	:pc#237212:oc#0:bc#1024:fc#1024:\
+   	:pg#204608:og#32604:bg#1024:fg#1024:tg=2.11BSD
+  
+! ra81new|RA81new|DEC RA81|NEW STYLE PARTITIONS:\
+   	:dt=MSCP:ty=fixed:ns#51:nt#14:nc#1248:so:\
+   	:b0=/mdec/rauboot:\
+   	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+--- 306,312 ----
+   	:pc#237212:oc#0:bc#1024:fc#1024:\
+   	:pg#204608:og#32604:bg#1024:fg#1024:tg=2.11BSD
+  
+! ra81|RA81|DEC RA81:\
+   	:dt=MSCP:ty=fixed:ns#51:nt#14:nc#1248:so:\
+   	:b0=/mdec/rauboot:\
+   	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
+***************
+*** 443,448 ****
+--- 317,334 ----
+   	:pf#182464:of#669340:bf#1024:ff#1024:tf=2.11BSD:\
+   	:pg#819200:og#32604:bg#1024:fg#1024:tg=2.11BSD:\
+   	:ph#39268:oh#851804:bh#1024:fh#1024:th=2.11BSD
++ 
++ ra81x|RA81X|Extended DEC RA81:\
++ 	:dt=MSCP:ty=fixed:ns#51:nt#14:nc#1815:so:\
++ 	:b0=/mdec/rauboot:\
++ 	:pa#15884:oa#0:ba#1024:fa#1024:ta=2.11BSD:\
++ 	:pb#33440:ob#15884:bb#1024:fb#1024:tb=swap:\
++ 	:pc#193282:oc#49324:bc#1024:fc#1024:tc=2.11BSD:\
++ 	:pd#15884:od#242606:bd#1024:fd#1024:td=2.11BSD:\
++ 	:pe#307200:oe#258490:be#1024:fe#1024:te=2.11BSD:\
++ 	:pf#728952:of#565690:bf#1024:ff#1024:tf=2.11BSD:\
++ 	:pg#1052036:og#242606:bg#1024:fg#1024:\
++ 	:ph#1294642:oh#0:bh#1024:fh#1024:th=2.11BSD
+  
+  ra82|RA82|DEC RA82:\
+  	:dt=MSCP:ty=fixed:ns#57:nt#15:nc#1423:so:\
+*** ./usr/src/share/zoneinfo/zic.8.old	Fri Nov 29 22:27:11 1996
+--- ./usr/src/share/zoneinfo/zic.8	Thu Sep 19 19:30:01 2024
+***************
+*** 1,3 ****
+--- 1,4 ----
++ .. @(#)zic.8	3.3 2024/9/19
+  .TH ZIC 8
+  .SH NAME
+  zic \- time zone compiler
+***************
+*** 28,34 ****
+  .TP
+  .BI "\-d " directory
+  Create time conversion information files in the named directory rather than
+! in the standard directory named below.
+  .TP
+  .BI "\-l " timezone
+  Use the given time zone as local time.
+--- 29,35 ----
+  .TP
+  .BI "\-d " directory
+  Create time conversion information files in the named directory rather than
+! in the default directory named below.
+  .TP
+  .BI "\-l " timezone
+  Use the given time zone as local time.
+***************
+*** 288,294 ****
+  field of the earliest transition time's rule to ensure that
+  the earliest transition time recorded in the compiled file is correct.
+  .SH FILES
+! /usr/share/zoneinfo	standard directory used for created files
+  .SH "SEE ALSO"
+  newctime(3), tzfile(5), zdump(8)
+- .. @(#)zic.8	3.2
+--- 289,294 ----
+  field of the earliest transition time's rule to ensure that
+  the earliest transition time recorded in the compiled file is correct.
+  .SH FILES
+! /usr/share/zoneinfo default directory used for created files
+  .SH "SEE ALSO"
+  newctime(3), tzfile(5), zdump(8)
+*** ./usr/src/man/man1/cc.1.old	Mon Feb 16 04:24:36 1987
+--- ./usr/src/man/man1/cc.1	Wed Sep 18 20:28:46 2024
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)cc.1	6.2 (Berkeley) 6/7/85
+  .\"
+! .TH CC 1 "June 7, 1985"
+  .UC 2
+  .SH NAME
+  cc \- C compiler (2BSD)
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)cc.1	6.3 (2.11BSD) 2024/9/18
+  .\"
+! .TH CC 1 "September 18, 2024"
+  .UC 2
+  .SH NAME
+  cc \- C compiler (2BSD)
+***************
+*** 136,141 ****
+--- 136,142 ----
+  .I string 
+  is empty, use a standard backup version.
+  .TP
++ .SM
+  .BR \-t [ p012 ]
+  Find only the designated compiler passes in the
+  files whose names are constructed by a
+***************
+*** 146,151 ****
+--- 147,157 ----
+  option, the
+  .I string
+  is taken to be `/usr/c/'.
++ .TP
++ .SM
++ .BR \-d
++ Debug; print what programs the compiler is calling,
++ with their arguments.
+  .PP
+  Other arguments
+  are taken
+*** ./usr/src/man/man1/netstat.1.old	Sun Dec 14 17:06:06 1986
+--- ./usr/src/man/man1/netstat.1	Fri Sep 20 14:03:35 2024
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)netstat.1	6.5 (Berkeley) 5/8/86
+  .\"
+! .TH NETSTAT 1 "May 8, 1986"
+  .UC 5
+  .SH NAME
+  netstat \- show network status
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)netstat.1	6.6 (2.11BSD) 2024/9/20
+  .\"
+! .TH NETSTAT 1 "Sep 20, 2024"
+  .UC 5
+  .SH NAME
+  netstat \- show network status
+***************
+*** 131,137 ****
+  .I system
+  and
+  .I core
+! allow substitutes for the defaults ``/vmunix'' and ``/dev/kmem''.
+  .PP
+  The default display, for active sockets, shows the local
+  and remote addresses, send and receive queue sizes (in bytes), protocol,
+--- 131,137 ----
+  .I system
+  and
+  .I core
+! allow substitutes for the defaults ``/unix'' and ``/dev/kmem''.
+  .PP
+  The default display, for active sockets, shows the local
+  and remote addresses, send and receive queue sizes (in bytes), protocol,
+*** ./usr/src/man/man1/iostat.1.old	Wed May  8 20:41:55 1985
+--- ./usr/src/man/man1/iostat.1	Fri Sep 20 14:04:17 2024
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)iostat.1	6.1 (Berkeley) 4/29/85
+  .\"
+! .TH IOSTAT 1 "April 29, 1985"
+  .UC 4
+  .SH NAME
+  iostat \- report I/O statistics
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)iostat.1	6.2 (2.11BSD) 2024/9/20
+  .\"
+! .TH IOSTAT 1 "Sep 20, 2024"
+  .UC 4
+  .SH NAME
+  iostat \- report I/O statistics
+***************
+*** 61,66 ****
+  .SH FILES
+  /dev/kmem
+  .br
+! /vmunix
+  .SH SEE ALSO
+  vmstat(1)
+--- 61,66 ----
+  .SH FILES
+  /dev/kmem
+  .br
+! /unix
+  .SH SEE ALSO
+  vmstat(1)
+*** ./usr/src/man/man1/uptime.1.old	Sun Dec 14 17:06:16 1986
+--- ./usr/src/man/man1/uptime.1	Fri Sep 20 14:04:52 2024
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)uptime.1	6.1 (Berkeley) 4/29/85
+  .\"
+! .TH UPTIME 1 "April 29, 1985"
+  .UC
+  .SH NAME
+  uptime \- show how long system has been up
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)uptime.1	6.2 (2.11BSD) 2024/9/20
+  .\"
+! .TH UPTIME 1 "Sep 20, 2024"
+  .UC
+  .SH NAME
+  uptime \- show how long system has been up
+***************
+*** 18,23 ****
+  .IR w (1)
+  command.
+  .SH FILES
+! /vmunix	system name list
+  .SH SEE ALSO
+  w(1)
+--- 18,23 ----
+  .IR w (1)
+  command.
+  .SH FILES
+! /unix	system name list
+  .SH SEE ALSO
+  w(1)
+*** ./usr/src/man/man1/vmstat.1.old	Wed Dec 31 10:46:58 2008
+--- ./usr/src/man/man1/vmstat.1	Fri Sep 20 14:06:59 2024
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)vmstat.1	6.3 (Berkeley) 3/15/86
+  .\"
+! .TH VMSTAT 1 "December 30, 2006"
+  .UC 4
+  .de s1
+  .if n .sp
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)vmstat.1	6.4 (2.11BSD) 2024/9/20
+  .\"
+! .TH VMSTAT 1 "Sep 20, 2024"
+  .UC 4
+  .de s1
+  .if n .sp
+***************
+*** 151,160 ****
+  to display specific drives, their names may be supplied on
+  the command line.
+  .SH FILES
+! /dev/kmem, /vmunix
+  .SH SEE ALSO
+  .IR systat (1),
+  .IR iostat (1)
+- .PP
+- The sections starting with ``Interpreting system activity'' in
+- .IR "Installing and Operating 4.2bsd" .
+--- 151,157 ----
+  to display specific drives, their names may be supplied on
+  the command line.
+  .SH FILES
+! /dev/kmem, /unix
+  .SH SEE ALSO
+  .IR systat (1),
+  .IR iostat (1)
+*** ./usr/src/man/man2/reboot.2.old	Sun Dec 14 17:06:53 1986
+--- ./usr/src/man/man2/reboot.2	Fri Sep 20 14:01:51 2024
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)reboot.2	6.1 (Berkeley) 5/9/85
+  .\"
+! .TH REBOOT 2 "May 9, 1985"
+  .UC 4
+  .SH NAME
+  reboot \- reboot system or halt processor
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)reboot.2	6.2 (2.11BSD) 2024/9/20
+  .\"
+! .TH REBOOT 2 "Sep 20, 2024"
+  .UC 4
+  .SH NAME
+  reboot \- reboot system or halt processor
+***************
+*** 26,32 ****
+  are used in scripts stored on the console storage media, or used
+  in manual bootstrap procedures.
+  When none of these options (e.g. RB_AUTOBOOT) is given, the system is rebooted
+! from file \*(lqvmunix\*(rq in the root file system of unit 0
+  of a disk chosen in a processor specific way.
+  An automatic consistency check of the disks is then normally performed.
+  .PP
+--- 26,32 ----
+  are used in scripts stored on the console storage media, or used
+  in manual bootstrap procedures.
+  When none of these options (e.g. RB_AUTOBOOT) is given, the system is rebooted
+! from file \*(lqunix\*(rq in the root file system of unit 0
+  of a disk chosen in a processor specific way.
+  An automatic consistency check of the disks is then normally performed.
+  .PP
+***************
+*** 41,47 ****
+  RB_ASKNAME
+  Interpreted by the bootstrap program itself, causing it to
+  inquire as to what file should be booted.  Normally, the system is
+! booted from the file \*(lqxx(0,0)vmunix\*(rq without asking.
+  .TP
+  RB_SINGLE
+  Normally, the reboot procedure involves an automatic disk consistency
+--- 41,47 ----
+  RB_ASKNAME
+  Interpreted by the bootstrap program itself, causing it to
+  inquire as to what file should be booted.  Normally, the system is
+! booted from the file \*(lqxx(0,0)unix\*(rq without asking.
+  .TP
+  RB_SINGLE
+  Normally, the reboot procedure involves an automatic disk consistency
+***************
+*** 66,71 ****
+  The caller is not the super-user.
+  .SH "SEE ALSO"
+  crash(8), halt(8), init(8), reboot(8)
+- .SH BUGS
+- The notion of ``console medium'', among other things,
+- is specific to the VAX.
+--- 66,68 ----
+*** ./usr/src/man/man3/nlist.3.old	Sun Dec 14 17:07:19 1986
+--- ./usr/src/man/man3/nlist.3	Fri Sep 20 14:02:35 2024
+***************
+*** 2,10 ****
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)nlist.3	6.1 (Berkeley) 5/15/85
+  .\"
+! .TH NLIST 3  "May 15, 1985"
+  .UC 4
+  .SH NAME
+  nlist \- get entries from name list
+--- 2,10 ----
+  .\" All rights reserved.  The Berkeley software License Agreement
+  .\" specifies the terms and conditions for redistribution.
+  .\"
+! .\"	@(#)nlist.3	6.2 (2.11BSD) 2024/9/20
+  .\"
+! .TH NLIST 3  "Sep 20, 2024"
+  .UC 4
+  .SH NAME
+  nlist \- get entries from name list
+***************
+*** 32,38 ****
+  for the structure declaration.
+  .PP
+  This subroutine is useful for examining the system name list kept in the file
+! .BR /vmunix .
+  In this way programs can obtain system addresses that are up to date.
+  .SH "SEE ALSO"
+  a.out(5)
+--- 32,38 ----
+  for the structure declaration.
+  .PP
+  This subroutine is useful for examining the system name list kept in the file
+! .BR /unix .
+  In this way programs can obtain system addresses that are up to date.
+  .SH "SEE ALSO"
+  a.out(5)
+*** ./VERSION.old	Mon Apr 17 21:07:20 2023
+--- ./VERSION	Fri Sep 27 19:17:59 2024
+***************
+*** 1,5 ****
+! Current Patch Level: 481
+! Date: April 17, 2023
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 482
+! Date: September 27, 2024
+  
+  2.11 BSD
+  ============

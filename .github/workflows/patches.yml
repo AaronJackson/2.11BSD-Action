@@ -888,3 +888,97 @@ jobs:
         run: |
           gzip ../ci.dsk
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-481.dsk.gz
+
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_482
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-482.dsk.gz
+
+      - name: apply 482
+        if: steps.built_482.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 481
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/482 > /tmp/482.patch
+            cd /
+            patch -p0 < /tmp/482.patch
+            cd /usr/src/lib/ccom
+            make c0
+            install -s c0 /lib/c0
+            make clean
+            cd /usr/src/sbin/dump
+            make install
+            make clean
+            cd ../dmesg
+            make install
+            make clean
+            cd /usr/src/ucb
+            make vmstat gcore
+            install -g kmem -m 2755 -s gcore /usr/ucb/gcore
+            install -g kmem -m 2755 -s vmstat /usr/ucb/vmstat
+            cd netstat
+            make install
+            make clean
+            cd ../top
+            make install
+            make clean
+            cd /usr/src/usr.bin/uucp
+            make acucntrl
+            install -s -m 6110 -o root -g daemon acucntrl /usr/libexec/acucntrl
+            make clean
+            cd /usr/src/usr.bin
+            make iostat
+            install -s -g kmem -m 2755 iostat /usr/bin/iostat
+            cd fstat
+            make install
+            make clean
+            cd /usr/src/libexec/identd
+            make install
+            make clean
+            cd /usr/src/local
+            make trace
+            install -s -o bin -g kmem -m 2755 trace /usr/local/trace
+            make clean
+            cd /usr/src/usr.sbin/rwhod
+            make install
+            make clean
+            cd /usr/src/usr.sbin/pstat
+            make install
+            make clean
+            cd ../syslogd
+            make install
+            make clean
+            cd ../bad144
+            make install
+            make clean
+            cd ../trpt
+            make install
+            make clean
+            cd /usr/src/man/man1
+            make cc.0 iostat.0 netstat.0 uptime.0 vmstat.0
+            install -c -o bin -g bin -m 444 *.0 /usr/man/cat1
+            make clean
+            cd ../man2
+            make reboot.0
+            install -c -o bin -g bin -m 444 *.0 /usr/man/cat2
+            make clean
+            cd ../man3
+            make nlist.0
+            install -c -o bin -g bin -m 444 *.0 /usr/man/cat3
+            make clean
+            cd /usr/src/share/zoneinfo
+            make zic.0
+            install -c -o bin -g bin -m 444 *.0 /usr/man/cat8
+            make clean
+            rm -f /usr/man/cat8/trsp.0
+            rm -f /vmunix
+            rm -rf /github
+            (find / -name '*~' -print | xargs rm) || true
+
+      - if: steps.built_482.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-482.dsk.gz
