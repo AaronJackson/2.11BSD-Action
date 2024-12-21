@@ -67,6 +67,9 @@ kernel is also rebuilt when necessary and provided in `/genunix`.
 | 477   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-477.dsk.gz |
 | 478   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-478.dsk.gz |
 | 479   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-479.dsk.gz |
+| 480   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-480.dsk.gz |
+| 481   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-481.dsk.gz |
+| 482   | https://asjackson-211bsd-ci.s3.fr-par.scw.cloud/211bsd-ci-482.dsk.gz |
 
 These images can be written to a SCSI (SCSI2SD if you want) and run on
 a real PDP-11, if you have one. Or, if you want to do a fresh install from tape, I
