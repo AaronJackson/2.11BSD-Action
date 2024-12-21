@@ -821,3 +821,44 @@ jobs:
           gzip ../ci.dsk
           aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-479.dsk.gz
 
+####################################################################################################
+      - name: check if build is needed
+        continue-on-error: true
+        id: built_480
+        run: aws s3 ls s3://asjackson-211bsd-ci/211bsd-ci-480.dsk.gz
+
+      - name: apply 480
+        if: steps.built_480.outcome != 'success'
+        uses: ./
+        with:
+          path: /github
+          patch_level: 479
+          run: |
+            sed -e '1,/.*---cut here---.*/ d' < patches/480 > /tmp/480.patch
+            cd /
+            patch -p0 < /tmp/480.patch
+            cd /usr/src/bin/login
+            make
+            make install
+            make clean
+            cd /usr/src/libexec/getty
+            make install
+            make clean
+            cd /usr/src/man/man4
+            /usr/man/manroff tty.4 > tty.0
+            install -o bin -o bin -m 444 tty.0 /usr/man/cat4
+            cd /usr/src/man/man5
+            /usr/man/manroff gettytab.5 > gettytab.0
+            install -o bin -o bin -m 444 gettytab.0 /usr/man/cat5
+            cd /sys/GENERIC
+            make
+            cp unix /genunix
+            make clean
+            rm -rf /github
+            (find / -name '*~' -print | xargs rm) || true
+
+      - if: steps.built_480.outcome != 'success'
+        run: |
+          gzip ../ci.dsk
+          aws s3 cp ../ci.dsk.gz s3://asjackson-211bsd-ci/211bsd-ci-480.dsk.gz
+

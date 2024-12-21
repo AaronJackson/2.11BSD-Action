@@ -12,7 +12,7 @@ inputs:
     required: true
 
   patch_level:
-    description: 457 to 479
+    description: 457 to 480
     required: false
     default: 479
 
