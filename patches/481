@@ -1,0 +1,1308 @@
+Subject: telnetd missing gettytab support, minor warp Makefile cleanup
+Index:	 src/libexec/telnetd/telnetd.c, src/games/warp/Makefile
+
+Description:
+	gettytab(5) information does not apply to sessions coming over telnet
+
+        The warp(6) Makefile has an extra -O entry in the CFLAGS.
+
+Repeat-By:
+	Repeat by trying to set things in gettytab such as "np" (no parity)
+	or editing (character erase) and observe that it does not have any 
+	effect on telnet sessions.  Another good example is changing the
+	banner message in gettytab and seeing that telnetd ignores the change.
+
+        View warp/Makefile and see "-O -O" where there should be "-O".
+
+Fix:
+        This patch also adds support for the terminal type "telnetd" which
+	can override the defaults with specific information for telnetd.
+
+        In addition to the gettytab support changes cleanup of telnetd.c
+	was done.
+
+        Four files are added to the telnetd source directory: gettytab.c,
+	gettytab.h, init.c, subr.c
+
+        NOTE:  At this time the manpages for gettytab and/or telnetd have
+	       not been updated.  This will be done at a later date.
+
+        Thanks to Johnny Billquist for dropping this in my inbox.
+
+        To install this patch cut where indicated and save to a file 
+	(/tmp/481.patch).  Then:
+
+cd /
+patch -p0 < /tmp/481.patch
+
+cd /usr/src/libexec/telnetd
+make install
+make clean
+
+	This and previous updates to 2.11BSD are available at the following
+	locations:
+	
+	ftp://ftp.dfupdate.se/pub/pdp11/2.11BSD
+	https://www.tuhs.org/Archive/Distributions/UCB/2.11BSD/Patches/
+	ftp://ftp.2bsd.com/2.11BSD
+
+---------------------------cut here--------------------
+*** ./usr/src/games/warp/Makefile.old	Sat Jan 27 02:45:52 1996
+--- ./usr/src/games/warp/Makefile	Mon Apr 17 21:07:28 2023
+***************
+*** 13,19 ****
+  CC = cc
+  bin = /usr/games
+  mansrc = /tmp
+! CFLAGS = -O -O
+  LDFLAGS = 
+  CHOWNER = bin
+  privlib = /usr/games/lib/warp
+--- 13,19 ----
+  CC = cc
+  bin = /usr/games
+  mansrc = /tmp
+! CFLAGS = -O
+  LDFLAGS = 
+  CHOWNER = bin
+  privlib = /usr/games/lib/warp
+*** ./usr/src/libexec/telnetd/Makefile.old	Sat Nov 16 16:13:42 1996
+--- ./usr/src/libexec/telnetd/Makefile	Wed Apr 26 08:50:47 2023
+***************
+*** 1,12 ****
+  #
+! # Public Domain.  1996/11/16 - Steven Schultz
+  #
+- #	@(#)Makefile	1.0 (2.11BSD) 1996/11/16
+- #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+! SRCS=	telnetd.c
+! OBJS=	telnetd.o
+  MAN=	telnetd.0
+  MANSRC=	telnetd.8
+  
+--- 1,10 ----
+  #
+! #	@(#)Makefile	2.0 (2.11BSD) 2023/4/26
+  #
+  CFLAGS=	 -O
+  SEPFLAG= -i
+! SRCS=	telnetd.c gettytab.c subr.c init.c
+! OBJS=	telnetd.o gettytab.o subr.o init.o
+  MAN=	telnetd.0
+  MANSRC=	telnetd.8
+  
+***************
+*** 24,32 ****
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: telnetd
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+! 	install -s -o root -g bin -m 755 telnetd ${DESTDIR}/usr/libexec/telnetd
+  
+  lint: ${SRCS}
+  	lint -hax ${SRCS}
+--- 22,30 ----
+  depend: ${SRCS}
+  	mkdep ${CFLAGS} ${SRCS}
+  
+! install: telnetd ${MAN}
+  	install -c -o bin -g bin -m 444 ${MAN} ${DESTDIR}/usr/man/cat8
+! 	install -c -s -o root -g bin -m 755 telnetd ${DESTDIR}/usr/libexec/telnetd
+  
+  lint: ${SRCS}
+  	lint -hax ${SRCS}
+*** ./usr/src/libexec/telnetd/telnetd.c.old	Sat Nov 16 23:40:05 1996
+--- ./usr/src/libexec/telnetd/telnetd.c	Mon Apr 17 21:36:32 2023
+***************
+*** 23,39 ****
+  #include <sys/time.h>
+  
+  #include <netinet/in.h>
+! 
+  #include <arpa/telnet.h>
+  
+  #include <stdio.h>
+  #include <signal.h>
+  #include <errno.h>
+  #include <sgtty.h>
+  #include <netdb.h>
+  #include <syslog.h>
+  #include <ctype.h>
+  
+  #define	OPT_NO			0		/* won't do this option */
+  #define	OPT_YES			1		/* will do this option */
+  #define	OPT_YES_BUT_ALWAYS_LOOK	2
+--- 23,43 ----
+  #include <sys/time.h>
+  
+  #include <netinet/in.h>
+! #include <arpa/inet.h>
+  #include <arpa/telnet.h>
+  
+  #include <stdio.h>
+  #include <signal.h>
+  #include <errno.h>
++ #include <unistd.h>
+  #include <sgtty.h>
+  #include <netdb.h>
+  #include <syslog.h>
+  #include <ctype.h>
++ #include <strings.h>
+  
++ #include "gettytab.h"
++ 
+  #define	OPT_NO			0		/* won't do this option */
+  #define	OPT_YES			1		/* will do this option */
+  #define	OPT_YES_BUT_ALWAYS_LOOK	2
+***************
+*** 46,72 ****
+  char	will[] = { IAC, WILL, '%', 'c', 0 };
+  char	wont[] = { IAC, WONT, '%', 'c', 0 };
+  
+  /*
+   * I/O data buffers, pointers, and counters.
+   */
+  char	ptyibuf[BUFSIZ], *ptyip = ptyibuf;
+- 
+  char	ptyobuf[BUFSIZ], *pfrontp = ptyobuf, *pbackp = ptyobuf;
+- 
+  char	netibuf[BUFSIZ], *netip = netibuf;
+- #define	NIACCUM(c)	{   *netip++ = c; \
+- 			    ncc++; \
+- 			}
+  
+  char	netobuf[BUFSIZ], *nfrontp = netobuf, *nbackp = netobuf;
+  char	*neturg = 0;		/* one past last bye of urgent data */
+  	/* the remote system seems to NOT be an old 4.2 */
+  int	not42 = 1;
+  
+- 
+- char BANNER1[] = "\r\n\r\n2.11 BSD UNIX (",
+-     BANNER2[] = ")\r\n\r\0\r\n\r\0";
+- 
+  		/* buffer for sub-options */
+  char	subbuffer[100], *subpointer= subbuffer, *subend= subbuffer;
+  #define	SB_CLEAR()	subpointer = subbuffer;
+--- 50,89 ----
+  char	will[] = { IAC, WILL, '%', 'c', 0 };
+  char	wont[] = { IAC, WONT, '%', 'c', 0 };
+  
++ struct	sgttyb tmode = {
++ 	0, 0, CERASE, CKILL, 0
++ };
++ struct	tchars tc = {
++ 	CINTR, CQUIT, CSTART,
++ 	CSTOP, CEOF, CBRK,
++ };
++ struct	ltchars ltc = {
++ 	CSUSP, CDSUSP, CRPRNT,
++ 	CFLUSH, CWERASE, CLNEXT
++ };
++ char	hostname[32];
++ 
++ #define	TABBUFSIZ	512
++ 
++ char	defent[TABBUFSIZ];
++ char	defstrs[TABBUFSIZ];
++ char	tabent[TABBUFSIZ];
++ char	tabstrs[TABBUFSIZ];
++ 
+  /*
+   * I/O data buffers, pointers, and counters.
+   */
+  char	ptyibuf[BUFSIZ], *ptyip = ptyibuf;
+  char	ptyobuf[BUFSIZ], *pfrontp = ptyobuf, *pbackp = ptyobuf;
+  char	netibuf[BUFSIZ], *netip = netibuf;
+  
++ #define	NIACCUM(c)	{ *netip++ = c; ncc++; }
++ 
+  char	netobuf[BUFSIZ], *nfrontp = netobuf, *nbackp = netobuf;
+  char	*neturg = 0;		/* one past last bye of urgent data */
+  	/* the remote system seems to NOT be an old 4.2 */
+  int	not42 = 1;
+  
+  		/* buffer for sub-options */
+  char	subbuffer[100], *subpointer= subbuffer, *subend= subbuffer;
+  #define	SB_CLEAR()	subpointer = subbuffer;
+***************
+*** 77,90 ****
+  #define	SB_GET()	((*subpointer++)&0xff)
+  #define	SB_EOF()	(subpointer >= subend)
+  
+! int	pcc, ncc;
+! 
+! int	pty, net;
+! int	inter;
+! extern	char **environ;
+! extern	int errno;
+! char	*line;
+  int	SYNCHing = 0;		/* we are in TELNET SYNCH mode */
+  /*
+   * The following are some clocks used to decide how to interpret
+   * the relationship between various variables.
+--- 94,106 ----
+  #define	SB_GET()	((*subpointer++)&0xff)
+  #define	SB_EOF()	(subpointer >= subend)
+  
+! int	pcc, ncc, pty, net, inter;
+  int	SYNCHing = 0;		/* we are in TELNET SYNCH mode */
++ char	*line;
++ 
++ extern char **environ;
++ extern void makeenv();
++ 
+  /*
+   * The following are some clocks used to decide how to interpret
+   * the relationship between various variables.
+***************
+*** 166,172 ****
+  }
+  
+  char	*terminaltype = 0;
+! char	*envinit[2];
+  int	cleanup();
+  
+  /*
+--- 182,188 ----
+  }
+  
+  char	*terminaltype = 0;
+! char	*env[128];
+  int	cleanup();
+  
+  /*
+***************
+*** 237,247 ****
+  	int f;
+  	struct sockaddr_in *who;
+  {
+! 	char *host, *inet_ntoa();
+! 	int i, p, t;
+  	struct sgttyb b;
+  	struct hostent *hp;
+! 	int c;
+  
+  	for (c = 'p'; c <= 's'; c++) {
+  		struct stat stb;
+--- 253,266 ----
+  	int f;
+  	struct sockaddr_in *who;
+  {
+! 	char *host;
+! 	int i, j, p, c;
+!         register int t;
+  	struct sgttyb b;
+  	struct hostent *hp;
+! 	int ldisp = OTTYDISC;
+! 	long allflags;
+! 	int someflags;
+  
+  	for (c = 'p'; c <= 's'; c++) {
+  		struct stat stb;
+***************
+*** 279,290 ****
+  	t = open(line, O_RDWR);
+  	if (t < 0)
+  		fatalperror(f, line);
+! 	ioctl(t, TIOCGETP, &b);
+! 	b.sg_flags = CRMOD|XTABS|ANYP;
+! 	ioctl(t, TIOCSETP, &b);
+! 	ioctl(p, TIOCGETP, &b);
+! 	b.sg_flags &= ~ECHO;
+  	ioctl(p, TIOCSETP, &b);
+  	hp = gethostbyaddr(&who->sin_addr, sizeof (struct in_addr),
+  		who->sin_family);
+  	if (hp)
+--- 298,325 ----
+  	t = open(line, O_RDWR);
+  	if (t < 0)
+  		fatalperror(f, line);
+! 
+! 	gethostname(hostname, sizeof (hostname));
+! 
+! 	gettable("default", defent, defstrs);
+! 	gendefaults();
+! 	gettable("telnetd", tabent, tabstrs);
+! 	setdefaults();
+! 
+! 	setchars();
+! 	ioctl(p, TIOCSETC, &tc);
+! 	ioctl(p, TIOCSETD, &ldisp);
+! 	allflags = setflags(2);
+! 	b.sg_flags = allflags & 0xffff;
+! 	someflags = allflags >> 16;
+  	ioctl(p, TIOCSETP, &b);
++ 	ioctl(p, TIOCSLTC, &ltc);
++ 	ioctl(p, TIOCLSET, &someflags);
++ 
++ 	edithost(HE);
++ 	if (IM && *IM)
++ 		putf(p, IM);
++ 
+  	hp = gethostbyaddr(&who->sin_addr, sizeof (struct in_addr),
+  		who->sin_family);
+  	if (hp)
+***************
+*** 310,318 ****
+  	dup2(t, 1);
+  	dup2(t, 2);
+  	close(t);
+! 	envinit[0] = terminaltype;
+! 	envinit[1] = 0;
+! 	environ = envinit;
+  	/*
+  	 * -h : pass on name of host.
+  	 *		WARNING:  -h is accepted by login if and only if
+--- 345,364 ----
+  	dup2(t, 1);
+  	dup2(t, 2);
+  	close(t);
+! 
+! 	/* Create our environment by copying selected parts of
+! 	 * the given environment, plus adding whatever comes from
+! 	 * terminal type, and gettytab.
+! 	 */
+! 	j = 0;
+! 	for (i = 0; environ[i] != (char *)0; i++) {
+! 		if (islower(environ[i][0])) continue;
+! 		if (strncmp(environ[i], "INET=", 5) == 0) continue;
+! 		if (strncmp(environ[i], "PATH=", 5) == 0) continue;
+! 		env[j++] = environ[i];
+! 	}
+! 	makeenv(&env[j], terminaltype);
+! 
+  	/*
+  	 * -h : pass on name of host.
+  	 *		WARNING:  -h is accepted by login if and only if
+***************
+*** 319,327 ****
+  	 *			getuid() == 0.
+  	 * -p : don't clobber the environment (so terminal type stays set).
+  	 */
+! 	execl("/bin/login", "login", "-h", host,
+! 					terminaltype ? "-p" : 0, 0);
+! 	fatalperror(f, "/bin/login");
+  	/*NOTREACHED*/
+  }
+  
+--- 365,373 ----
+  	 *			getuid() == 0.
+  	 * -p : don't clobber the environment (so terminal type stays set).
+  	 */
+! 	execle(LO, "login", "-h", host, "-p", 0, env);
+! 
+! 	fatalperror(f, LO);
+  	/*NOTREACHED*/
+  }
+  
+***************
+*** 346,357 ****
+  	fatal(f, buf);
+  }
+  
+- 
+  /*
+   * Check a descriptor to see if out of band data exists on it.
+   */
+  
+- 
+  stilloob(s)
+  int	s;		/* socket number */
+  {
+--- 392,401 ----
+***************
+*** 382,388 ****
+  telnet(f, p)
+  {
+  	int on = 1;
+- 	char hostname[MAXHOSTNAMELEN];
+  
+  	ioctl(f, FIONBIO, &on);
+  	ioctl(p, FIONBIO, &on);
+--- 426,431 ----
+***************
+*** 418,439 ****
+  	hisopts[TELOPT_ECHO] = OPT_YES_BUT_ALWAYS_LOOK;
+  
+  	/*
+- 	 * Show banner that getty never gave.
+- 	 *
+- 	 * The banner includes some null's (for TELNET CR disambiguation),
+- 	 * so we have to be somewhat complicated.
+- 	 */
+- 
+- 	gethostname(hostname, sizeof (hostname));
+- 
+- 	bcopy(BANNER1, nfrontp, sizeof BANNER1 -1);
+- 	nfrontp += sizeof BANNER1 - 1;
+- 	bcopy(hostname, nfrontp, strlen(hostname));
+- 	nfrontp += strlen(hostname);
+- 	bcopy(BANNER2, nfrontp, sizeof BANNER2 -1);
+- 	nfrontp += sizeof BANNER2 - 1;
+- 
+- 	/*
+  	 * Call telrcv() once to pick up anything received during
+  	 * terminal type negotiation.
+  	 */
+--- 461,466 ----
+***************
+*** 973,979 ****
+  {
+      switch (SB_GET()) {
+      case TELOPT_TTYPE: {		/* Yaaaay! */
+! 	static char terminalname[5+41] = "TERM=";
+  
+  	settimer(ttypesubopt);
+  
+--- 1000,1006 ----
+  {
+      switch (SB_GET()) {
+      case TELOPT_TTYPE: {		/* Yaaaay! */
+! 	static char terminalname[41] = "";
+  
+  	settimer(ttypesubopt);
+  
+***************
+*** 1282,1285 ****
+--- 1309,1352 ----
+  	line[strlen("/dev/")] = 'p';
+  	chmod(line, 0666);
+  	chown(line, 0, 0);
++ }
++ 
++ putf(p, cp)
++ 	int p;
++ 	register char *cp;
++ {
++ 	char *ttyn, *slash;
++ 	char datebuffer[60];
++ 	extern char editedhost[];
++ 
++ 	while (*cp) {
++ 		if (*cp != '%') {
++ 			*(nfrontp++) = *(cp++);
++ 			continue;
++ 		}
++ 		switch (*++cp) {
++ 
++ 		case 't':
++ 			ttyn = ttyname(p);
++ 			slash = rindex(ttyn, '/');
++ 			if (slash == (char *) 0) {
++ 				memcpy(nfrontp, ttyn, strlen(ttyn));
++ 				nfrontp += strlen(ttyn);
++ 			} else {
++ 				memcpy(nfrontp, slash+1, strlen(slash+1));
++ 				nfrontp += strlen(slash+1);
++ 			}
++ 			break;
++ 
++ 		case 'h':
++ 			memcpy(nfrontp, editedhost, strlen(editedhost));
++ 			nfrontp += strlen(editedhost);
++ 			break;
++ 
++ 		case '%':
++ 			*(nfrontp++) = '%';
++ 			break;
++ 		}
++ 		cp++;
++ 	}
+  }
+*** ./VERSION.old	Wed Apr 12 21:52:45 2023
+--- ./VERSION	Mon Apr 17 21:07:20 2023
+***************
+*** 1,5 ****
+! Current Patch Level: 480
+! Date: April 13, 2023
+  
+  2.11 BSD
+  ============
+--- 1,5 ----
+! Current Patch Level: 481
+! Date: April 17, 2023
+  
+  2.11 BSD
+  ============
+*** /dev/null	Wed Apr 26 08:43:51 2023
+--- ./usr/src/libexec/telnetd/init.c	Mon Apr 17 21:20:50 2023
+***************
+*** 0 ****
+--- 1,87 ----
++ /*
++  * Copyright (c) 1980 Regents of the University of California.
++  * All rights reserved.  The Berkeley software License Agreement
++  * specifies the terms and conditions for redistribution.
++  */
++ 
++ #if	!defined(lint) && defined(DOSCCS)
++ static char sccsid[] = "@(#)init.c	5.3 (2.11BSD) 2023/4/13";
++ #endif
++ 
++ /*
++  * Getty table initializations.
++  *
++  * Melbourne getty.
++  */
++ #include <sgtty.h>
++ #include "gettytab.h"
++ 
++ extern  struct sgttyb tmode;
++ extern	struct tchars tc;
++ extern	struct ltchars ltc;
++ extern	char hostname[];
++ 
++ struct	gettystrs gettystrs[] = {
++ 	{ "nx" },			/* next table */
++ 	{ "cl" },			/* screen clear characters */
++ 	{ "im" },			/* initial message */
++ 	{ "lm", "login: " },		/* login message */
++ 	{ "er", &tmode.sg_erase },	/* erase character */
++ 	{ "kl", &tmode.sg_kill },	/* kill character */
++ 	{ "et", &tc.t_eofc },		/* eof chatacter (eot) */
++ 	{ "pc", "" },			/* pad character */
++ 	{ "tt" },			/* terminal type */
++ 	{ "ev" },			/* enviroment */
++ 	{ "lo", "/bin/login" },		/* login program */
++ 	{ "hn", hostname },		/* host name */
++ 	{ "he" },			/* host name edit */
++ 	{ "in", &tc.t_intrc },		/* interrupt char */
++ 	{ "qu", &tc.t_quitc },		/* quit char */
++ 	{ "xn", &tc.t_startc },		/* XON (start) char */
++ 	{ "xf", &tc.t_stopc },		/* XOFF (stop) char */
++ 	{ "bk", &tc.t_brkc },		/* brk char (alt \n) */
++ 	{ "su", &ltc.t_suspc },		/* suspend char */
++ 	{ "ds", &ltc.t_dsuspc },	/* delayed suspend */
++ 	{ "rp", &ltc.t_rprntc },	/* reprint char */
++ 	{ "fl", &ltc.t_flushc },	/* flush output */
++ 	{ "we", &ltc.t_werasc },	/* word erase */
++ 	{ "ln", &ltc.t_lnextc },	/* literal next */
++ 	{ 0 }
++ };
++ 
++ struct	gettynums gettynums[] = {
++ 	{ "is" },			/* input speed */
++ 	{ "os" },			/* output speed */
++ 	{ "sp" },			/* both speeds */
++ 	{ "to" },			/* timeout */
++ 	{ "f0" },			/* output flags */
++ 	{ "f1" },			/* input flags */
++ 	{ "f2" },			/* user mode flags */
++ 	{ "pf" },			/* delay before flush at 1st prompt */
++ 	{ 0 }
++ };
++ 
++ struct	gettyflags gettyflags[] = {
++ 	{ "ht",	0 },			/* has tabs */
++ 	{ "nl",	1 },			/* has newline char */
++ 	{ "ep",	0 },			/* even parity */
++ 	{ "op",	0 },			/* odd parity */
++ 	{ "ap",	0 },			/* any parity */
++ 	{ "ec",	1 },			/* no echo */
++ 	{ "co",	0 },			/* console special */
++ 	{ "cb",	0 },			/* crt backspace */
++ 	{ "ck",	0 },			/* crt kill */
++ 	{ "ce",	0 },			/* crt erase */
++ 	{ "pe",	0 },			/* printer erase */
++ 	{ "rw",	1 },			/* don't use raw */
++ 	{ "xc",	1 },			/* don't ^X ctl chars */
++ 	{ "ig",	0 },			/* ignore garbage */
++ 	{ "ps",	0 },			/* do port selector speed select */
++ 	{ "hc",	1 },			/* don't set hangup on close */
++ 	{ "ub", 0 },			/* unbuffered output */
++ 	{ "ab", 0 },			/* auto-baud detect with '\r' */
++ 	{ "dx", 0 },			/* set decctlq */
++ 	{ "hf", 0 },			/* set HardwareFlowcontrol */
++ 	{ "np", 0 },			/* no parity (ie. pass8) */
++ 	{ 0 }
++ };
+*** /dev/null	Wed Apr 26 08:43:51 2023
+--- ./usr/src/libexec/telnetd/gettytab.c	Wed Apr 26 08:37:38 2023
+***************
+*** 0 ****
+--- 1,304 ----
++ /*
++  * Copyright (c) 1980 Regents of the University of California.
++  * All rights reserved.  The Berkeley software License Agreement
++  * specifies the terms and conditions for redistribution.
++  */
++ 
++ #if !defined(lint) && defined(DOSCCS)
++ static char sccsid[] = "@(#)gettytab.c	5.2 (2.11BSD) 2023/4/26";
++ #endif
++ 
++ #include <ctype.h>
++ 
++ #define	TABBUFSIZ	512
++ 
++ static	char *tbuf;
++ int	hopcount;	/* detect infinite loops in termcap, init 0 */
++ char	*skip(), *getstr(), *decode();
++ 
++ /*
++  * Get an entry for terminal name in buffer bp,
++  * from the termcap file.  Parse is very rudimentary;
++  * we just notice escaped newlines.
++  */
++ getent(bp, name)
++ 	char *bp, *name;
++ {
++ 	register char *cp;
++ 	int c, tf;
++ 	register int i = 0, cnt = 0;
++ 	char ibuf[TABBUFSIZ];
++ 
++ 	tbuf = bp;
++ 	tf = open("/etc/gettytab", 0);
++ 	if (tf < 0)
++ 		return (-1);
++ 	for (;;) {
++ 		cp = bp;
++ 		for (;;) {
++ 			if (i == cnt) {
++ 				cnt = read(tf, ibuf, TABBUFSIZ);
++ 				if (cnt <= 0) {
++ 					close(tf);
++ 					return (0);
++ 				}
++ 				i = 0;
++ 			}
++ 			c = ibuf[i++];
++ 			if (c == '\n') {
++ 				if (cp > bp && cp[-1] == '\\'){
++ 					cp--;
++ 					continue;
++ 				}
++ 				break;
++ 			}
++ 			if (cp >= bp+TABBUFSIZ) {
++ 				write(2,"Gettytab entry too long\n", 24);
++ 				break;
++ 			} else
++ 				*cp++ = c;
++ 		}
++ 		*cp = 0;
++ 
++ 		/*
++ 		 * The real work for the match.
++ 		 */
++ 		if (namatch(name)) {
++ 			close(tf);
++ 			return(nchktc());
++ 		}
++ 	}
++ }
++ 
++ /*
++  * tnchktc: check the last entry, see if it's tc=xxx. If so,
++  * recursively find xxx and append that entry (minus the names)
++  * to take the place of the tc=xxx entry. This allows termcap
++  * entries to say "like an HP2621 but doesn't turn on the labels".
++  * Note that this works because of the left to right scan.
++  */
++ #define	MAXHOP	32
++ nchktc()
++ {
++ 	register char *p, *q;
++ 	char tcname[16];	/* name of similar terminal */
++ 	char tcbuf[TABBUFSIZ];
++ 	char *holdtbuf = tbuf;
++ 	int l;
++ 
++ 	p = tbuf + strlen(tbuf) - 2;	/* before the last colon */
++ 	while (*--p != ':')
++ 		if (p<tbuf) {
++ 			write(2, "Bad gettytab entry\n", 19);
++ 			return (0);
++ 		}
++ 	p++;
++ 	/* p now points to beginning of last field */
++ 	if (p[0] != 't' || p[1] != 'c')
++ 		return(1);
++ 	strcpy(tcname,p+3);
++ 	q = tcname;
++ 	while (q && *q != ':')
++ 		q++;
++ 	*q = 0;
++ 	if (++hopcount > MAXHOP) {
++ 		write(2, "Getty: infinite tc= loop\n", 25);
++ 		return (0);
++ 	}
++ 	if (getent(tcbuf, tcname) != 1)
++ 		return(0);
++ 	for (q=tcbuf; *q != ':'; q++)
++ 		;
++ 	l = p - holdtbuf + strlen(q);
++ 	if (l > TABBUFSIZ) {
++ 		write(2, "Gettytab entry too long\n", 24);
++ 		q[TABBUFSIZ - (p-tbuf)] = 0;
++ 	}
++ 	strcpy(p, q+1);
++ 	tbuf = holdtbuf;
++ 	return(1);
++ }
++ 
++ /*
++  * Tnamatch deals with name matching.  The first field of the termcap
++  * entry is a sequence of names separated by |'s, so we compare
++  * against each such name.  The normal : terminator after the last
++  * name (before the first field) stops us.
++  */
++ namatch(np)
++ 	char *np;
++ {
++ 	register char *Np, *Bp;
++ 
++ 	Bp = tbuf;
++ 	if (*Bp == '#')
++ 		return(0);
++ 	for (;;) {
++ 		for (Np = np; *Np && *Bp == *Np; Bp++, Np++)
++ 			continue;
++ 		if (*Np == 0 && (*Bp == '|' || *Bp == ':' || *Bp == 0))
++ 			return (1);
++ 		while (*Bp && *Bp != ':' && *Bp != '|')
++ 			Bp++;
++ 		if (*Bp == 0 || *Bp == ':')
++ 			return (0);
++ 		Bp++;
++ 	}
++ }
++ 
++ /*
++  * Skip to the next field.  Notice that this is very dumb, not
++  * knowing about \: escapes or any such.  If necessary, :'s can be put
++  * into the termcap file in octal.
++  */
++ static char *
++ skip(bp)
++ 	register char *bp;
++ {
++ 
++ 	while (*bp && *bp != ':')
++ 		bp++;
++ 	while (*bp == ':')
++ 		bp++;
++ 	return (bp);
++ }
++ 
++ /*
++  * Return the (numeric) option id.
++  * Numeric options look like
++  *	li#80
++  * i.e. the option string is separated from the numeric value by
++  * a # character.  If the option is not found we return -1.
++  * Note that we handle octal numbers beginning with 0.
++  */
++ long
++ getnum(id)
++ 	char *id;
++ {
++ 	register long i, base;
++ 	register char *bp = tbuf;
++ 
++ 	for (;;) {
++ 		bp = skip(bp);
++ 		if (*bp == 0)
++ 			return (-1);
++ 		if (*bp++ != id[0] || *bp == 0 || *bp++ != id[1])
++ 			continue;
++ 		if (*bp == '@')
++ 			return(-1);
++ 		if (*bp != '#')
++ 			continue;
++ 		bp++;
++ 		base = 10;
++ 		if (*bp == '0')
++ 			base = 8;
++ 		i = 0;
++ 		while (isdigit(*bp))
++ 			i *= base, i += *bp++ - '0';
++ 		return (i);
++ 	}
++ }
++ 
++ /*
++  * Handle a flag option.
++  * Flag options are given "naked", i.e. followed by a : or the end
++  * of the buffer.  Return 1 if we find the option, or 0 if it is
++  * not given.
++  */
++ getflag(id)
++ 	char *id;
++ {
++ 	register char *bp = tbuf;
++ 
++ 	for (;;) {
++ 		bp = skip(bp);
++ 		if (!*bp)
++ 			return (-1);
++ 		if (*bp++ == id[0] && *bp != 0 && *bp++ == id[1]) {
++ 			if (!*bp || *bp == ':')
++ 				return (1);
++ 			else if (*bp == '!')
++ 				return (0);
++ 			else if (*bp == '@')
++ 				return(-1);
++ 		}
++ 	}
++ }
++ 
++ /*
++  * Get a string valued option.
++  * These are given as
++  *	cl=^Z
++  * Much decoding is done on the strings, and the strings are
++  * placed in area, which is a ref parameter which is updated.
++  * No checking on area overflow.
++  */
++ char *
++ getstr(id, area)
++ 	char *id, **area;
++ {
++ 	register char *bp = tbuf;
++ 
++ 	for (;;) {
++ 		bp = skip(bp);
++ 		if (!*bp)
++ 			return (0);
++ 		if (*bp++ != id[0] || *bp == 0 || *bp++ != id[1])
++ 			continue;
++ 		if (*bp == '@')
++ 			return(0);
++ 		if (*bp != '=')
++ 			continue;
++ 		bp++;
++ 		return (decode(bp, area));
++ 	}
++ }
++ 
++ /*
++  * Tdecode does the grung work to decode the
++  * string capability escapes.
++  */
++ static char *
++ decode(str, area)
++ 	register char *str;
++ 	char **area;
++ {
++ 	register char *cp;
++ 	register int c;
++ 	register char *dp;
++ 	int i;
++ 
++ 	cp = *area;
++ 	while ((c = *str++) && c != ':') {
++ 		switch (c) {
++ 
++ 		case '^':
++ 			c = *str++ & 037;
++ 			break;
++ 
++ 		case '\\':
++ 			dp = "E\033^^\\\\::n\nr\rt\tb\bf\f";
++ 			c = *str++;
++ nextc:
++ 			if (*dp++ == c) {
++ 				c = *dp++;
++ 				break;
++ 			}
++ 			dp++;
++ 			if (*dp)
++ 				goto nextc;
++ 			if (isdigit(c)) {
++ 				c -= '0', i = 2;
++ 				do
++ 					c <<= 3, c |= *str++ - '0';
++ 				while (--i && isdigit(*str));
++ 			}
++ 			break;
++ 		}
++ 		*cp++ = c;
++ 	}
++ 	*cp++ = 0;
++ 	str = *area;
++ 	*area = cp;
++ 	return (str);
++ }
+*** /dev/null	Wed Apr 26 08:43:51 2023
+--- ./usr/src/libexec/telnetd/subr.c	Wed Apr 26 08:48:37 2023
+***************
+*** 0 ****
+--- 1,254 ----
++ /*
++  * Copyright (c) 1980 Regents of the University of California.
++  * All rights reserved.  The Berkeley software License Agreement
++  * specifies the terms and conditions for redistribution.
++  */
++ 
++ #if	!defined(lint) && defined(DOSCCS)
++ static char sccsid[] = "@(#)subr.c	5.5 (2.11BSD) 2023/4/13";
++ #endif
++ 
++ /*
++  * Melbourne getty.
++  */
++ #include <sgtty.h>
++ #include "gettytab.h"
++ 
++ extern	struct sgttyb tmode;
++ extern	struct tchars tc;
++ extern	struct ltchars ltc;
++ 
++ /*
++  * Get a table entry.
++  */
++ gettable(name, buf, area)
++ 	char *name, *buf, *area;
++ {
++ 	register struct gettystrs *sp;
++ 	register struct gettynums *np;
++ 	register struct gettyflags *fp;
++ 	long ln;
++ 	int n;
++ 
++ 	hopcount = 0;		/* new lookup, start fresh */
++ 	if (getent(buf, name) != 1)
++ 		return;
++ 
++ 	for (sp = gettystrs; sp->field; sp++)
++ 		sp->value = getstr(sp->field, &area);
++ 	for (np = gettynums; np->field; np++) {
++ 		ln = getnum(np->field);
++ 		if (ln == -1)
++ 			np->set = 0;
++ 		else {
++ 			np->set = 1;
++ 			np->value = ln;
++ 		}
++ 	}
++ 	for (fp = gettyflags; fp->field; fp++) {
++ 		n = getflag(fp->field);
++ 		if (n == -1)
++ 			fp->set = 0;
++ 		else {
++ 			fp->set = 1;
++ 			fp->value = n ^ fp->invrt;
++ 		}
++ 	}
++ }
++ 
++ gendefaults()
++ {
++ 	register struct gettystrs *sp;
++ 	register struct gettynums *np;
++ 	register struct gettyflags *fp;
++ 
++ 	for (sp = gettystrs; sp->field; sp++)
++ 		if (sp->value)
++ 			sp->defalt = sp->value;
++ 	for (np = gettynums; np->field; np++)
++ 		if (np->set)
++ 			np->defalt = np->value;
++ 	for (fp = gettyflags; fp->field; fp++)
++ 		if (fp->set)
++ 			fp->defalt = fp->value;
++ 		else
++ 			fp->defalt = fp->invrt;
++ }
++ 
++ setdefaults()
++ {
++ 	register struct gettystrs *sp;
++ 	register struct gettynums *np;
++ 	register struct gettyflags *fp;
++ 
++ 	for (sp = gettystrs; sp->field; sp++)
++ 		if (!sp->value)
++ 			sp->value = sp->defalt;
++ 	for (np = gettynums; np->field; np++)
++ 		if (!np->set)
++ 			np->value = np->defalt;
++ 	for (fp = gettyflags; fp->field; fp++)
++ 		if (!fp->set)
++ 			fp->value = fp->defalt;
++ }
++ 
++ static char **
++ charnames[] = {
++ 	&ER, &KL, &IN, &QU, &XN, &XF, &ET, &BK,
++ 	&SU, &DS, &RP, &FL, &WE, &LN, 0
++ };
++ 
++ static char *
++ charvars[] = {
++ 	&tmode.sg_erase, &tmode.sg_kill, &tc.t_intrc,
++ 	&tc.t_quitc, &tc.t_startc, &tc.t_stopc,
++ 	&tc.t_eofc, &tc.t_brkc, &ltc.t_suspc,
++ 	&ltc.t_dsuspc, &ltc.t_rprntc, &ltc.t_flushc,
++ 	&ltc.t_werasc, &ltc.t_lnextc, 0
++ };
++ 
++ setchars()
++ {
++ 	register int i;
++ 	register char *p;
++ 
++ 	for (i = 0; charnames[i]; i++) {
++ 		p = *charnames[i];
++ 		if (p && *p)
++ 			*charvars[i] = *p;
++ 		else
++ 			*charvars[i] = '\377';
++ 	}
++ }
++ 
++ long
++ setflags(n)
++ {
++ 	register long f;
++ 
++ 	switch (n) {
++ 	case 0:
++ 		if (F0set)
++ 			return(F0);
++ 		break;
++ 	case 1:
++ 		if (F1set)
++ 			return(F1);
++ 		break;
++ 	default:
++ 		if (F2set)
++ 			return(F2);
++ 		break;
++ 	}
++ 
++ 	f = 0;
++ 
++ 	if (AP)
++ 		f |= ANYP;
++ 	else if (OP)
++ 		f |= ODDP;
++ 	else if (EP)
++ 		f |= EVENP;
++ 	if (HF)
++ 		f |= RTSCTS;
++ 	if (NL)
++ 		f |= CRMOD;
++ 
++ 	if (n == 1) {		/* read mode flags */
++ 		if (RW)
++ 			f |= RAW;
++ 		else
++ 			f |= CBREAK;
++ 		return (f);
++ 	}
++ 
++ 	if (!HT)
++ 		f |= XTABS;
++ 	if (n == 0)
++ 		return (f);
++ 	if (CB)
++ 		f |= CRTBS;
++ 	if (CE)
++ 		f |= CRTERA;
++ 	if (CK)
++ 		f |= CRTKIL;
++ 	if (PE)
++ 		f |= PRTERA;
++ 	if (GEC)
++ 		f |= ECHO;
++ 	if (XC)
++ 		f |= CTLECH;
++ 	if (DX)
++ 		f |= DECCTQ;
++ 	if (NP)
++ 		f |= PASS8;
++ 	return (f);
++ }
++ 
++ char	editedhost[32];
++ 
++ edithost(pat)
++ 	register char *pat;
++ {
++ 	register char *host = HN;
++ 	register char *res = editedhost;
++ 
++ 	if (!pat)
++ 		pat = "";
++ 	while (*pat) {
++ 		switch (*pat) {
++ 
++ 		case '#':
++ 			if (*host)
++ 				host++;
++ 			break;
++ 
++ 		case '@':
++ 			if (*host)
++ 				*res++ = *host++;
++ 			break;
++ 
++ 		default:
++ 			*res++ = *pat;
++ 			break;
++ 
++ 		}
++ 		if (res == &editedhost[sizeof editedhost - 1]) {
++ 			*res = '\0';
++ 			return;
++ 		}
++ 		pat++;
++ 	}
++ 	if (*host)
++ 		strncpy(res, host, sizeof editedhost - (res - editedhost) - 1);
++ 	else
++ 		*res = '\0';
++ 	editedhost[sizeof editedhost - 1] = '\0';
++ }
++ 
++ void makeenv(env, term)
++ 	char *env[];
++         char *term;
++ {
++ 	static char termbuf[128] = "TERM=";
++ 	register char *p, *q;
++ 	register char **ep;
++ 	char *index();
++ 
++ 	ep = env;
++ 	if (*term) {
++ 		strcat(termbuf, term);
++ 		*ep++ = termbuf;
++ 	}
++ 	if (p = EV) {
++ 		q = p;
++ 		while (q = index(q, ',')) {
++ 			*q++ = '\0';
++ 			*ep++ = p;
++ 			p = q;
++ 		}
++ 		if (*p)
++ 			*ep++ = p;
++ 	}
++ 	*ep = (char *)0;
++ }
+*** /dev/null	Wed Apr 26 08:43:51 2023
+--- ./usr/src/libexec/telnetd/gettytab.h	Mon Apr 17 21:07:28 2023
+***************
+*** 0 ****
+--- 1,114 ----
++ /*
++  * Copyright (c) 1980 Regents of the University of California.
++  * All rights reserved.  The Berkeley software License Agreement
++  * specifies the terms and conditions for redistribution.
++  *
++  *	@(#)gettytab.h	5.3 (2.11BSD) 2023/4/13
++  */
++ 
++ /*
++  * Getty description definitions.
++  */
++ struct	gettystrs {
++ 	char	*field;		/* name to lookup in gettytab */
++ 	char	*defalt;	/* value we find by looking in defaults */
++ 	char	*value;		/* value that we find there */
++ };
++ 
++ struct	gettynums {
++ 	char	*field;		/* name to lookup */
++ 	long	defalt;		/* number we find in defaults */
++ 	long	value;		/* number we find there */
++ 	int	set;		/* we actually got this one */
++ };
++ 
++ struct gettyflags {
++ 	char	*field;		/* name to lookup */
++ 	char	invrt;		/* name existing in gettytab --> false */
++ 	char	defalt;		/* true/false in defaults */
++ 	char	value;		/* true/false flag */
++ 	char	set;		/* we found it */
++ };
++ 
++ /*
++  * String values.
++  */
++ #define	NX	gettystrs[0].value
++ #define	CL	gettystrs[1].value
++ #define IM	gettystrs[2].value
++ #define	LM	gettystrs[3].value
++ #define	ER	gettystrs[4].value
++ #define	KL	gettystrs[5].value
++ #define	ET	gettystrs[6].value
++ #define	PC	gettystrs[7].value
++ #define	TT	gettystrs[8].value
++ #define	EV	gettystrs[9].value
++ #define	LO	gettystrs[10].value
++ #define HN	gettystrs[11].value
++ #define HE	gettystrs[12].value
++ #define IN	gettystrs[13].value
++ #define QU	gettystrs[14].value
++ #define XN	gettystrs[15].value
++ #define XF	gettystrs[16].value
++ #define BK	gettystrs[17].value
++ #define SU	gettystrs[18].value
++ #define DS	gettystrs[19].value
++ #define RP	gettystrs[20].value
++ #define FL	gettystrs[21].value
++ #define WE	gettystrs[22].value
++ #define LN	gettystrs[23].value
++ 
++ /*
++  * Numeric definitions.
++  */
++ #define	IS	gettynums[0].value
++ #define	OS	gettynums[1].value
++ #define	SP	gettynums[2].value
++ #define	TO	gettynums[3].value
++ #define	F0	gettynums[4].value
++ #define	F0set	gettynums[4].set
++ #define	F1	gettynums[5].value
++ #define	F1set	gettynums[5].set
++ #define	F2	gettynums[6].value
++ #define	F2set	gettynums[6].set
++ #define	PF	gettynums[7].value
++ 
++ /*
++  * Boolean values.
++  */
++ #define	HT	gettyflags[0].value
++ #define	NL	gettyflags[1].value
++ #define	EP	gettyflags[2].value
++ #define	EPset	gettyflags[2].set
++ #define	OP	gettyflags[3].value
++ #define	OPset	gettyflags[2].set
++ #define	AP	gettyflags[4].value
++ #define	APset	gettyflags[2].set
++ #define	GEC	gettyflags[5].value
++ #define	CO	gettyflags[6].value
++ #define	CB	gettyflags[7].value
++ #define	CK	gettyflags[8].value
++ #define	CE	gettyflags[9].value
++ #define	PE	gettyflags[10].value
++ #define	RW	gettyflags[11].value
++ #define	XC	gettyflags[12].value
++ #define	IG	gettyflags[13].value
++ #define	PS	gettyflags[14].value
++ #define	HC	gettyflags[15].value
++ #define UB	gettyflags[16].value
++ #define AB	gettyflags[17].value
++ #define DX	gettyflags[18].value
++ #define HF	gettyflags[19].value
++ #define NP	gettyflags[20].value
++ 
++ int	getent();
++ long	getnum();
++ int	getflag();
++ char	*getstr();
++ 
++ long	setflags();
++ 
++ extern	struct gettyflags gettyflags[];
++ extern	struct gettynums gettynums[];
++ extern	struct gettystrs gettystrs[];
++ extern	int hopcount;
